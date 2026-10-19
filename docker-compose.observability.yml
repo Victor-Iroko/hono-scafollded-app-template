@@ -1,0 +1,23 @@
+services:
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:latest
+    command: ["--config=/etc/otel-collector.yml"]
+    volumes:
+      - ./observability/otel-collector.yml:/etc/otel-collector.yml:ro
+    ports:
+      - "4317:4317" # OTLP gRPC
+      - "4318:4318" # OTLP HTTP (app -> OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318)
+      - "8889:8889" # OTel SDK metrics, Prometheus format
+
+  prometheus:
+    image: prom/prometheus:latest
+    volumes:
+      - ./observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports:
+      - "9090:9090"
+
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    ports:
+      - "16686:16686" # UI
+      - "4317" # OTLP gRPC (from collector, internal only)

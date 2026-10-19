@@ -1,0 +1,45 @@
+# deps
+node_modules/
+
+# env / secrets
+.env
+.env.*
+!.env.example
+!.env.test.example
+*.local
+
+# build output
+dist/
+build/
+*.tsbuildinfo
+
+# logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+bun-debug.log*
+
+# test / coverage
+coverage/
+.nyc_output/
+*.lcov
+
+# tooling caches
+.cache/
+.turbo/
+.eslintcache
+.oxlintcache
+
+# editors / os
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
+*.swp
+
+# agent harness
+.openchamber

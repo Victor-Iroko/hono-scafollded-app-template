@@ -1,0 +1,89 @@
+services:
+  postgres-test:
+    image: postgres:18-alpine
+    container_name: hono-app-postgres-test
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB_TEST:-app_db_test}
+      POSTGRES_INITDB_ARGS: "--nosync"
+    ports:
+      - "${POSTGRES_PORT_TEST:-5433}:5432"
+    command:
+      - postgres
+      - -c
+      - fsync=off
+      - -c
+      - synchronous_commit=off
+      - -c
+      - full_page_writes=off
+      - -c
+      - wal_level=minimal
+      - -c
+      - max_wal_senders=0
+      - -c
+      - max_wal_size=1GB
+      - -c
+      - shared_buffers=256MB
+      - -c
+      - log_statement=none
+      - -c
+      - log_min_duration_statement=-1
+    tmpfs:
+      - /var/lib/postgresql:size=1g
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U $${POSTGRES_USER:-postgres} -d $${POSTGRES_DB_TEST:-app_db_test}",
+        ]
+      interval: 2s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+
+  redis-test:
+    image: redis/redis-stack:7.4.0-v1
+    container_name: hono-app-redis-test
+    environment:
+      REDIS_ARGS: "--save '' --appendonly no --requirepass ${REDIS_PASSWORD:-redis}"
+    ports:
+      - "${REDIS_PORT_TEST:-6380}:6379"
+    tmpfs:
+      - /data:size=256m
+    healthcheck:
+      test: ["CMD-SHELL", 'redis-cli -a "$${REDIS_PASSWORD:-redis}" ping | grep PONG']
+      interval: 2s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+
+  # In-memory S3Mock discards data on stop and skips credential/signature checks;
+  # it tests storage wiring, not authorization.
+  s3mock-test:
+    image: adobe/s3mock:latest
+    container_name: hono-app-s3mock-test
+    environment:
+      COM_ADOBE_TESTING_S3MOCK_STORE_INITIAL_BUCKETS: ${S3_BUCKET_TEST:-app-bucket-test}
+    ports:
+      - "${S3_PORT_TEST:-9090}:9090"
+    healthcheck:
+      # The management endpoints are not exposed, so probe the S3 API itself;
+      # GET / is ListBuckets and answers 200 without credentials.
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:9090/"]
+      interval: 2s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+
+  # Captures test mail for assertions via MAILPIT_UI_PORT_TEST; no shell for healthchecks.
+  mailpit-test:
+    image: axllent/mailpit:latest
+    container_name: hono-app-mailpit-test
+    environment:
+      MP_MAX_MESSAGES: 100
+      MP_SMTP_AUTH_ACCEPT_ANY: 1
+      MP_SMTP_AUTH_ALLOW_INSECURE: 1
+    ports:
+      - "${MAILPIT_SMTP_PORT_TEST:-1026}:1025"
+      - "${MAILPIT_UI_PORT_TEST:-8026}:8025"

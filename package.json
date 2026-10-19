@@ -1,0 +1,73 @@
+{
+  "name": "hono-scafollded-app-template",
+  "scripts": {
+    "dev": "bun run --hot src/index.ts",
+    "worker": "bun run src/worker.ts",
+    "dev:all": "bun run --parallel dev worker",
+    "openapi:generate": "bun run scripts/openapi/generate.ts && bunx oxfmt openapi.json",
+    "prepare": "husky",
+    "lint": "oxlint",
+    "format": "oxfmt --write",
+    "format:check": "oxfmt --check",
+    "typecheck": "tsc --noEmit",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
+    "db:push": "drizzle-kit push",
+    "db:seed": "bun run scripts/seed/index.ts",
+    "test": "bun test",
+    "test:unit": "bun test tests/unit",
+    "test:integration": "bun test tests/integration",
+    "test:coverage": "bun test --coverage"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.1152.0",
+    "@aws-sdk/s3-request-presigner": "^3.1152.0",
+    "@hono/bun": "^1.0.1",
+    "@hono/otel": "^1.2.0",
+    "@hono/prometheus": "^1.0.3",
+    "@hono/standard-validator": "^0.4.0",
+    "@opentelemetry/api": "^1.9.1",
+    "@opentelemetry/auto-instrumentations-node": "^0.81.0",
+    "@opentelemetry/exporter-metrics-otlp-http": "^0.223.0",
+    "@opentelemetry/exporter-trace-otlp-http": "^0.223.0",
+    "@opentelemetry/sdk-node": "^0.223.0",
+    "@scalar/hono-api-reference": "^0.12.12",
+    "@sentry/bun": "^11.6.0",
+    "@sentry/hono": "^11.6.0",
+    "bullmq": "^6.3.16",
+    "bullmq-otel": "^2.0.1",
+    "cockatiel": "^4.0.0",
+    "drizzle-orm": "^0.45.4",
+    "hono": "^4.13.13",
+    "hono-openapi": "^1.3.5",
+    "hono-pino": "^0.10.3",
+    "ioredis": "^6.0.0",
+    "nodemailer": "^10.1.7",
+    "pg": "^8.23.1",
+    "pino": "^10.4.0",
+    "prom-client": "^15.1.3",
+    "rate-limiter-flexible": "^11.2.1",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "@types/nodemailer": "^8.0.2",
+    "@types/pg": "^8.23.1",
+    "drizzle-kit": "^0.31.11",
+    "drizzle-seed": "^0.3.1",
+    "husky": "^9.1.7",
+    "lint-staged": "^17.6.0",
+    "oxfmt": "^0.72.0",
+    "oxlint": "^1.87.0",
+    "typescript": "^7.0.2"
+  },
+  "lint-staged": {
+    "*.{js,jsx,ts,tsx}": [
+      "oxlint --fix",
+      "oxfmt --write"
+    ],
+    "*.{json,md}": [
+      "oxfmt --write"
+    ]
+  }
+}

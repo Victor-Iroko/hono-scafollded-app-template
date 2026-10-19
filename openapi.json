@@ -1,0 +1,174 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Hono Scaffolded App API",
+    "description": "HTTP API for the Hono scaffolded application.",
+    "version": "1.0.0"
+  },
+  "components": {},
+  "paths": {
+    "/healthz": {
+      "get": {
+        "operationId": "getHealth",
+        "summary": "Check whether the process is alive",
+        "responses": {
+          "200": {
+            "description": "The process is alive",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean",
+                      "const": true
+                    }
+                  },
+                  "required": ["ok"]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/readyz": {
+      "get": {
+        "operationId": "getReadiness",
+        "summary": "Check whether required dependencies are ready",
+        "responses": {
+          "200": {
+            "description": "All dependencies are ready",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean",
+                      "const": true
+                    },
+                    "db": {
+                      "type": "object",
+                      "properties": {
+                        "ok": {
+                          "type": "boolean"
+                        },
+                        "latencyMs": {
+                          "type": "number"
+                        }
+                      },
+                      "required": ["ok", "latencyMs"]
+                    },
+                    "redis": {
+                      "type": "object",
+                      "properties": {
+                        "ok": {
+                          "type": "boolean"
+                        },
+                        "latencyMs": {
+                          "type": "number"
+                        }
+                      },
+                      "required": ["ok", "latencyMs"]
+                    },
+                    "s3": {
+                      "type": "object",
+                      "properties": {
+                        "ok": {
+                          "type": "boolean"
+                        },
+                        "latencyMs": {
+                          "type": "number"
+                        }
+                      },
+                      "required": ["ok", "latencyMs"]
+                    },
+                    "email": {
+                      "type": "object",
+                      "properties": {
+                        "ok": {
+                          "type": "boolean"
+                        },
+                        "latencyMs": {
+                          "type": "number"
+                        }
+                      },
+                      "required": ["ok", "latencyMs"]
+                    }
+                  },
+                  "required": ["ok", "db", "redis", "s3", "email"]
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "One or more dependencies are unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean",
+                      "const": false
+                    },
+                    "db": {
+                      "type": "object",
+                      "properties": {
+                        "ok": {
+                          "type": "boolean"
+                        },
+                        "latencyMs": {
+                          "type": "number"
+                        }
+                      },
+                      "required": ["ok", "latencyMs"]
+                    },
+                    "redis": {
+                      "type": "object",
+                      "properties": {
+                        "ok": {
+                          "type": "boolean"
+                        },
+                        "latencyMs": {
+                          "type": "number"
+                        }
+                      },
+                      "required": ["ok", "latencyMs"]
+                    },
+                    "s3": {
+                      "type": "object",
+                      "properties": {
+                        "ok": {
+                          "type": "boolean"
+                        },
+                        "latencyMs": {
+                          "type": "number"
+                        }
+                      },
+                      "required": ["ok", "latencyMs"]
+                    },
+                    "email": {
+                      "type": "object",
+                      "properties": {
+                        "ok": {
+                          "type": "boolean"
+                        },
+                        "latencyMs": {
+                          "type": "number"
+                        }
+                      },
+                      "required": ["ok", "latencyMs"]
+                    }
+                  },
+                  "required": ["ok", "db", "redis", "s3", "email"]
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

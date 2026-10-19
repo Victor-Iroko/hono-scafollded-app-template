@@ -1,0 +1,5 @@
+instances:
+  - url: your-org.docs.buildwithfern.com
+
+navigation:
+  - api: API Reference

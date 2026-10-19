@@ -1,0 +1,114 @@
+services:
+  postgres:
+    image: postgres:18-alpine
+    container_name: hono-app-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-app_db}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER:-postgres} -d $${POSTGRES_DB:-app_db}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  redis:
+    image: redis/redis-stack:7.4.0-v1
+    container_name: hono-app-redis
+    restart: unless-stopped
+    # Cache / rate-limit store: evictable, no persistence needed.
+    environment:
+      REDIS_ARGS: "--appendonly no --save '' --maxmemory-policy allkeys-lru --requirepass ${REDIS_PASSWORD:-redis}"
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+      - "${REDIS_INSIGHT_PORT:-8001}:8001"
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD-SHELL", 'redis-cli -a "$${REDIS_PASSWORD:-redis}" ping | grep PONG']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  redis-jobs:
+    image: redis/redis-stack:7.4.0-v1
+    container_name: hono-app-redis-jobs
+    restart: unless-stopped
+    # BullMQ store: jobs are lost if keys are evicted, so noeviction + persistence.
+    environment:
+      REDIS_ARGS: "--appendonly yes --maxmemory-policy noeviction --requirepass ${REDIS_PASSWORD:-redis}"
+    ports:
+      - "${REDIS_JOBS_PORT:-6381}:6379"
+    volumes:
+      - redisjobsdata:/data
+    healthcheck:
+      test: ["CMD-SHELL", 'redis-cli -a "$${REDIS_PASSWORD:-redis}" ping | grep PONG']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  rustfs-perms:
+    image: busybox:stable
+    container_name: hono-app-rustfs-perms
+    restart: "no"
+    user: "0:0"
+    command: ["chown", "-R", "10001:10001", "/data"]
+    volumes:
+      - rustfsdata:/data
+
+  rustfs:
+    image: rustfs/rustfs:latest
+    container_name: hono-app-rustfs
+    restart: unless-stopped
+    depends_on:
+      rustfs-perms:
+        condition: service_completed_successfully
+    environment:
+      RUSTFS_VOLUMES: /data
+      RUSTFS_ADDRESS: 0.0.0.0:9000
+      RUSTFS_CONSOLE_ADDRESS: 0.0.0.0:9001
+      RUSTFS_CONSOLE_ENABLE: "true"
+      RUSTFS_CONSOLE_CORS_ALLOWED_ORIGINS: "*"
+      # Defaults are well-known; override before exposing beyond localhost.
+      RUSTFS_ACCESS_KEY: ${S3_ACCESS_KEY_ID:-rustfsadmin}
+      RUSTFS_SECRET_KEY: ${S3_SECRET_ACCESS_KEY:-rustfsadmin}
+      RUSTFS_OBS_LOGGER_LEVEL: info
+    ports:
+      - "${S3_PORT:-9000}:9000" # S3 API
+      - "${S3_CONSOLE_PORT:-9001}:9001" # Web console
+    volumes:
+      - rustfsdata:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/health/ready"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  mailpit:
+    image: axllent/mailpit:latest
+    container_name: hono-app-mailpit
+    restart: unless-stopped
+    # Local-only email capture (SMTP :1025, UI/API :8025); no shell for healthchecks.
+    environment:
+      MP_MAX_MESSAGES: 500
+      # Accept any credentials over plain SMTP, so an SMTP_URL with auth works.
+      MP_SMTP_AUTH_ACCEPT_ANY: 1
+      MP_SMTP_AUTH_ALLOW_INSECURE: 1
+    ports:
+      - "${MAILPIT_SMTP_PORT:-1025}:1025"
+      - "${MAILPIT_UI_PORT:-8025}:8025"
+
+volumes:
+  pgdata:
+  redisdata:
+  redisjobsdata:
+  rustfsdata:
