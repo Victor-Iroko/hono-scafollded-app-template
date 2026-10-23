@@ -2,6 +2,7 @@ import type { Child, FC } from "hono/jsx";
 import { renderToString } from "hono/jsx/dom/server";
 import { z } from "zod";
 import { PasswordResetEmail, passwordResetSchema } from "./templates/password-reset";
+import { VerifyEmail, verifyEmailSchema } from "./templates/verify-email";
 import { WelcomeEmail, welcomeSchema } from "./templates/welcome";
 
 export type RenderedEmail = {
@@ -45,6 +46,11 @@ export const emails = {
     schema: passwordResetSchema,
     subject: () => "Reset your password",
     component: PasswordResetEmail,
+  }),
+  verifyEmail: defineEmail({
+    schema: verifyEmailSchema,
+    subject: () => "Verify your email address",
+    component: VerifyEmail,
   }),
 };
 

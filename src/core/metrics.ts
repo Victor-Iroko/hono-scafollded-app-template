@@ -2,6 +2,7 @@ import { prometheus } from "@hono/prometheus";
 import { Registry } from "prom-client";
 
 let registry: Registry | undefined;
+let metrics: ReturnType<typeof prometheus> | undefined;
 
 export function getMetricsRegistry(): Registry {
   if (!registry) registry = new Registry();
@@ -9,8 +10,8 @@ export function getMetricsRegistry(): Registry {
 }
 
 export function initMetrics() {
-  return prometheus({
+  return (metrics ??= prometheus({
     registry: getMetricsRegistry(),
     collectDefaultMetrics: true,
-  });
+  }));
 }

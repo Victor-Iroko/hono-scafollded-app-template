@@ -9,14 +9,6 @@
 
 - field-specific `fields` for `23505`: constraint names cannot be parsed — a composite key like `users_org_id_email_key` reads exactly like a single-column unique on `email` — so a duplicate email currently returns a generic 409 with no `fields` entry. A declarative `Record<constraintName, fieldPath>` consulted in `describeDbError()` gives signup forms the field back without guessing, and any unlisted constraint keeps falling back to the generic message. Needs seed entries as unique constraints land in `src/db/schema`
 
-`auth` — Better Auth
-
-- integrate Better Auth with Hono and the existing Drizzle/Postgres setup; define auth tables and migrations, and mount the auth handler without conflicting with API middleware
-- configure `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`/base URL, and trusted origins; validate required settings at startup and document secret generation/rotation and local/deployment URLs
-- decide which sign-in methods to enable (email/password and any social providers); keep provider credentials separate from Better Auth's secret and document callback URLs for enabled providers
-- set session lifetime/refresh and cookie policy for local and production environments; ensure production cookies are secure and trusted origins are explicit
-- add an auth middleware/helper for resolving the current user and protecting routes, plus tests for sign-in, session validation, unauthorized access, and origin/cookie behavior
-
 `email` — delivery tracking (deferred from the first pass)
 
 - `src/db/schema/email.ts`: `emails` (id, to, from, template, data, idempotencyKey, status, messageId, attempts, lastError, timestamps) and `email_suppressions` (email, reason, detail, createdAt), enums plus migration

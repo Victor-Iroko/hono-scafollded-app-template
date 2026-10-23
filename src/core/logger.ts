@@ -29,7 +29,13 @@ function getRootLogger(): pino.Logger {
     level: env.LOG_LEVEL,
     base: { service: "api", env: env.NODE_ENV },
     mixin: otelLogMixin,
-    redact: ["req.headers.authorization", "*.password", "*.token"],
+    redact: [
+      "req.headers.authorization",
+      "req.headers.cookie",
+      'res.headers["set-cookie"]',
+      "*.password",
+      "*.token",
+    ],
     transport: isDev
       ? { target: "hono-pino/debug-log", options: { colorEnabled: true } }
       : undefined,

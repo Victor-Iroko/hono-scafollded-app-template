@@ -10,6 +10,9 @@ import { ErrorResponseBody, globalErrorHandler } from "./core/errors";
 import type { ENV } from "./core/env";
 import { initMetrics } from "./core/metrics";
 import { apiRouter } from "./api/router";
+import { AUTH_BASE_PATH } from "./auth/constants";
+import type { AppAuth } from "./auth/auth";
+import { authContext } from "./auth/middleware";
 
 type AppMiddleware = {
   otel: MiddlewareHandler;
@@ -22,10 +25,27 @@ type AppMiddleware = {
 
 type AppDependencies = {
   env: ENV;
+  auth: AppAuth;
   middleware: AppMiddleware;
 };
 
-export function createApp({ env, middleware }: AppDependencies) {
+let llmsTxt: Promise<string> | undefined;
+
+function getLlmsTxt() {
+  llmsTxt ??= generateLlmsTxt().catch((err) => {
+    llmsTxt = undefined;
+    throw err;
+  });
+  return llmsTxt;
+}
+
+async function generateLlmsTxt() {
+  const spec = await Bun.file("openapi.json").text();
+  const { createMarkdownFromOpenApi } = await import("@scalar/openapi-to-markdown");
+  return createMarkdownFromOpenApi(spec);
+}
+
+export function createApp({ env, auth, middleware }: AppDependencies) {
   const app = new Hono<{ Variables: AppVariables }>();
 
   app.use("*", contextStorage());
@@ -43,12 +63,17 @@ export function createApp({ env, middleware }: AppDependencies) {
   }
 
   app.use(middleware.logger);
+  app.use("*", authContext(auth));
+
+  const { registerMetrics, printMetrics } = initMetrics();
+  app.use("*", registerMetrics);
+
+  app.all(`${AUTH_BASE_PATH}/*`, (c) => auth.handler(c.req.raw));
+
   app.use("*", middleware.redis);
   app.use(middleware.rateLimit);
   app.use("*", middleware.database);
   app.use("*", middleware.s3);
-  const { registerMetrics, printMetrics } = initMetrics();
-  app.use("*", registerMetrics);
 
   app.get("/metrics", async (c) => {
     if (env.METRICS_TOKEN) {
@@ -66,13 +91,24 @@ export function createApp({ env, middleware }: AppDependencies) {
     app.get("/openapi.json", describeRoute({ hide: true }), async (c) =>
       c.json(await Bun.file("openapi.json").json()),
     );
+    app.get("/llms.txt", describeRoute({ hide: true }), async (c) => {
+      const markdown = await getLlmsTxt();
+      return c.body(markdown, 200, {
+        "Content-Type": "text/markdown; charset=utf-8",
+        "Cache-Control": "public, max-age=300",
+      });
+    });
     app.get(
       "/docs",
       describeRoute({ hide: true }),
-      Scalar({ url: "/openapi.json", pageTitle: "Hono Scaffolded App API" }),
+      Scalar({
+        url: "/openapi.json",
+        pageTitle: "Hono Scaffolded App API",
+      }),
     );
   } else {
     app.get("/openapi.json", (c) => c.notFound());
+    app.get("/llms.txt", (c) => c.notFound());
     app.get("/docs", (c) => c.notFound());
   }
 

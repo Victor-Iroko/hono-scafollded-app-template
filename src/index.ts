@@ -1,4 +1,5 @@
 import { createApp } from "./app";
+import { createAuth } from "./auth/auth";
 import { initEnv, getEnv } from "./core/env";
 import { initInstrumentation, otelMiddleware } from "./core/instrumentation";
 import { getLogger, loggerMiddleware } from "./core/logger";
@@ -20,6 +21,7 @@ if (getEnv().S3_AUTO_CREATE_BUCKET) {
 
 const app = createApp({
   env: getEnv(),
+  auth: createAuth(getEnv()),
   middleware: {
     otel: otelMiddleware(),
     logger: loggerMiddleware(),

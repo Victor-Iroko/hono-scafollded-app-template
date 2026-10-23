@@ -3,6 +3,7 @@ import { z, type ZodError } from "zod";
 export const ERROR_CODES = [
   "BAD_REQUEST",
   "UNAUTHORIZED",
+  "SESSION_EXPIRED",
   "FORBIDDEN",
   "NOT_FOUND",
   "ROUTE_NOT_FOUND",

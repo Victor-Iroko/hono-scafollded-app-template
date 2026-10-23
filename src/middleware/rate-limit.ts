@@ -35,17 +35,24 @@ export type RateLimitOptions = {
   blockDuration?: number;
 };
 
-function defaultKeyGenerator(c: Context): string {
-  const forwarded = c.req.header("x-forwarded-for");
-  if (forwarded) {
-    const first = forwarded.split(",")[0]?.trim();
-    if (first) return first;
+/** Use forwarded addresses only when a trusted proxy overwrites the header. */
+export function getClientKey(c: Context, trustProxyHeaders: boolean): string {
+  if (trustProxyHeaders) {
+    const forwarded = c.req.header("x-forwarded-for");
+    if (forwarded) {
+      const first = forwarded.split(",")[0]?.trim();
+      if (first) return first;
+    }
   }
   try {
     return getConnInfo(c).remote.address ?? "unknown";
   } catch {
     return "unknown";
   }
+}
+
+function defaultKeyGenerator(c: Context): string {
+  return getClientKey(c, getEnv().AUTH_TRUST_PROXY_HEADERS);
 }
 
 /** One guard shared by every limiter — they hit the same Redis, so a trip stops them all. */
