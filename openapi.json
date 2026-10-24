@@ -173,14 +173,14 @@
   },
   "tags": [
     {
-      "name": "Default",
-      "description": "Default endpoints that are included with Better Auth by default. These endpoints are not part of any plugin."
+      "name": "Auth",
+      "description": "Authentication endpoints."
     }
   ],
   "paths": {
     "/api/auth/sign-in/social": {
       "post": {
-        "tags": ["Default"],
+        "tags": ["Auth"],
         "description": "Sign in with a social provider",
         "operationId": "socialSignIn",
         "security": [
@@ -468,7 +468,7 @@
     },
     "/api/auth/callback/{id}": {
       "get": {
-        "tags": ["Default"],
+        "tags": ["Auth"],
         "security": [
           {
             "bearerAuth": []
@@ -580,7 +580,7 @@
         }
       },
       "post": {
-        "tags": ["Default"],
+        "tags": ["Auth"],
         "security": [
           {
             "bearerAuth": []
@@ -727,7 +727,7 @@
     },
     "/api/auth/get-session": {
       "get": {
-        "tags": ["Default"],
+        "tags": ["Auth"],
         "description": "Get the current session",
         "operationId": "getSession",
         "security": [
@@ -851,7 +851,7 @@
         }
       },
       "post": {
-        "tags": ["Default"],
+        "tags": ["Auth"],
         "description": "Get the current session",
         "operationId": "getSessionPost",
         "security": [
@@ -987,7 +987,7 @@
     },
     "/api/auth/sign-out": {
       "post": {
-        "tags": ["Default"],
+        "tags": ["Auth"],
         "description": "Sign out the current user",
         "operationId": "signOut",
         "security": [
@@ -1141,7 +1141,7 @@
     },
     "/api/auth/sign-up/email": {
       "post": {
-        "tags": ["Default"],
+        "tags": ["Auth"],
         "description": "Sign up a user using email and password",
         "operationId": "signUpWithEmailAndPassword",
         "security": [
@@ -1356,7 +1356,7 @@
     },
     "/api/auth/sign-in/email": {
       "post": {
-        "tags": ["Default"],
+        "tags": ["Auth"],
         "description": "Sign in with email and password",
         "operationId": "signInEmail",
         "security": [
@@ -1522,7 +1522,7 @@
     },
     "/api/auth/reset-password": {
       "post": {
-        "tags": ["Default"],
+        "tags": ["Auth"],
         "description": "Reset the password for a user",
         "operationId": "resetPassword",
         "security": [
@@ -1665,7 +1665,7 @@
     },
     "/api/auth/verify-password": {
       "post": {
-        "tags": ["Default"],
+        "tags": ["Auth"],
         "description": "Verify the current user's password",
         "operationId": "verifyPassword",
         "security": [
@@ -1804,7 +1804,7 @@
     },
     "/api/auth/verify-email": {
       "get": {
-        "tags": ["Default"],
+        "tags": ["Auth"],
         "description": "Verify the email of the user",
         "security": [
           {
@@ -1950,7 +1950,7 @@
     },
     "/api/auth/send-verification-email": {
       "post": {
-        "tags": ["Default"],
+        "tags": ["Auth"],
         "description": "Send a verification email to the user",
         "operationId": "sendVerificationEmail",
         "security": [
@@ -2098,7 +2098,7 @@
     },
     "/api/auth/change-email": {
       "post": {
-        "tags": ["Default"],
+        "tags": ["Auth"],
         "operationId": "changeEmail",
         "security": [
           {
@@ -2252,7 +2252,7 @@
     },
     "/api/auth/change-password": {
       "post": {
-        "tags": ["Default"],
+        "tags": ["Auth"],
         "description": "Change the password of the user",
         "operationId": "changePassword",
         "security": [
@@ -2441,7 +2441,7 @@
     },
     "/api/auth/update-session": {
       "post": {
-        "tags": ["Default"],
+        "tags": ["Auth"],
         "description": "Update the current session",
         "operationId": "updateSession",
         "security": [
@@ -2579,7 +2579,7 @@
     },
     "/api/auth/update-user": {
       "post": {
-        "tags": ["Default"],
+        "tags": ["Auth"],
         "description": "Update the current user",
         "operationId": "updateUser",
         "security": [
@@ -2722,7 +2722,7 @@
     },
     "/api/auth/delete-user": {
       "post": {
-        "tags": ["Default"],
+        "tags": ["Auth"],
         "description": "Delete the user",
         "operationId": "deleteUser",
         "security": [
@@ -2874,7 +2874,7 @@
     },
     "/api/auth/request-password-reset": {
       "post": {
-        "tags": ["Default"],
+        "tags": ["Auth"],
         "description": "Send a password reset email to the user",
         "operationId": "requestPasswordReset",
         "security": [
@@ -3020,7 +3020,7 @@
     },
     "/api/auth/reset-password/{token}": {
       "get": {
-        "tags": ["Default"],
+        "tags": ["Auth"],
         "description": "Redirects the user to the callback URL with the token",
         "operationId": "resetPasswordCallback",
         "security": [
@@ -3161,7 +3161,7 @@
     },
     "/api/auth/list-sessions": {
       "get": {
-        "tags": ["Default"],
+        "tags": ["Auth"],
         "description": "List all active sessions for the user",
         "operationId": "listUserSessions",
         "security": [
@@ -3281,7 +3281,7 @@
     },
     "/api/auth/revoke-session": {
       "post": {
-        "tags": ["Default"],
+        "tags": ["Auth"],
         "description": "Revoke a single session",
         "security": [
           {
@@ -3420,7 +3420,7 @@
     },
     "/api/auth/revoke-sessions": {
       "post": {
-        "tags": ["Default"],
+        "tags": ["Auth"],
         "description": "Revoke all sessions for the user",
         "security": [
           {
@@ -3553,7 +3553,7 @@
     },
     "/api/auth/revoke-other-sessions": {
       "post": {
-        "tags": ["Default"],
+        "tags": ["Auth"],
         "description": "Revoke all other sessions for the user except the current one",
         "security": [
           {
@@ -3686,7 +3686,7 @@
     },
     "/api/auth/link-social": {
       "post": {
-        "tags": ["Default"],
+        "tags": ["Auth"],
         "description": "Link a social account to the user",
         "operationId": "linkSocialAccount",
         "security": [
@@ -3939,7 +3939,7 @@
     },
     "/api/auth/list-accounts": {
       "get": {
-        "tags": ["Default"],
+        "tags": ["Auth"],
         "description": "List all accounts linked to the user",
         "operationId": "listUserAccounts",
         "security": [
@@ -4096,7 +4096,7 @@
     },
     "/api/auth/delete-user/callback": {
       "get": {
-        "tags": ["Default"],
+        "tags": ["Auth"],
         "description": "Callback to complete user deletion with verification token",
         "security": [
           {
@@ -4241,7 +4241,7 @@
     },
     "/api/auth/unlink-account": {
       "post": {
-        "tags": ["Default"],
+        "tags": ["Auth"],
         "description": "Unlink an account",
         "security": [
           {
@@ -4379,7 +4379,7 @@
     },
     "/api/auth/refresh-token": {
       "post": {
-        "tags": ["Default"],
+        "tags": ["Auth"],
         "description": "Refresh the access token using a refresh token",
         "security": [
           {
@@ -4543,7 +4543,7 @@
     },
     "/api/auth/get-access-token": {
       "post": {
-        "tags": ["Default"],
+        "tags": ["Auth"],
         "description": "Get a valid access token, doing a refresh if needed",
         "security": [
           {
@@ -4700,7 +4700,7 @@
     },
     "/api/auth/account-info": {
       "get": {
-        "tags": ["Default"],
+        "tags": ["Auth"],
         "description": "Get the account info provided by the provider",
         "security": [
           {
@@ -4860,7 +4860,7 @@
     },
     "/api/auth/ok": {
       "get": {
-        "tags": ["Default"],
+        "tags": ["Auth"],
         "description": "Check if the API is working",
         "security": [
           {
@@ -4983,7 +4983,7 @@
     },
     "/api/auth/error": {
       "get": {
-        "tags": ["Default"],
+        "tags": ["Auth"],
         "description": "Displays an error page",
         "security": [
           {

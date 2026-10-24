@@ -14,7 +14,7 @@
 
 ## API modules
 
-- Organize the `api` folder into domain modules. Each module should have a `<module>.router.ts`, `<module>.schema.ts`, and `<module>.service.ts` file.
+- Organize the `api` folder into domain modules. Each module should have a `<module>.router.ts`, `<module>.schema.ts`, and `<module>.service.ts` file. Add a `<module>.error.ts` file when the module needs custom errors specific to that domain.
 - Keep HTTP routes and request/response handling in `<module>.router.ts`.
 - Define the module's validation schemas and related input/output types in `<module>.schema.ts`.
 - Put the module's business logic and data operations in `<module>.service.ts`; keep that logic out of the router.

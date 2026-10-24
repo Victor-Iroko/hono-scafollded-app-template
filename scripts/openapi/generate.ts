@@ -29,13 +29,23 @@ const authSpec = await auth.api.generateOpenAPISchema();
 const authPaths = Object.fromEntries(
   Object.entries(authSpec.paths ?? {}).map(([path, pathItem]) => [
     path.startsWith(AUTH_BASE_PATH) ? path : `${AUTH_BASE_PATH}${path}`,
-    pathItem,
+    Object.fromEntries(
+      Object.entries(pathItem ?? {}).map(([method, operation]) => [
+        method,
+        operation && typeof operation === "object" && "tags" in operation
+          ? { ...operation, tags: ["Auth"] }
+          : operation,
+      ]),
+    ),
   ]),
 );
 
 const tags = [...(appSpec.tags ?? [])];
-for (const tag of authSpec.tags ?? []) {
+for (const tag of (authSpec.tags ?? []).filter((tag) => tag.name !== "Default")) {
   if (!tags.some((existing) => existing.name === tag.name)) tags.push(tag);
+}
+if (!tags.some((tag) => tag.name === "Auth")) {
+  tags.push({ name: "Auth", description: "Authentication endpoints." });
 }
 
 const spec = {
