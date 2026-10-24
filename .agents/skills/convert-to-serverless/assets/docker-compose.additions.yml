@@ -4,42 +4,42 @@
 # serverless-redis-http exposes a local Redis over the Upstash HTTP protocol,
 # so @upstash/redis works locally. qstash runs Upstash's in-memory dev server.
 
-  serverless-redis-http:
-    image: hiett/serverless-redis-http:latest
-    container_name: hono-app-redis-http
-    restart: unless-stopped
-    environment:
-      SRH_MODE: env
-      SRH_TOKEN: ${UPSTASH_REDIS_REST_TOKEN:-local_token}
-      SRH_CONNECTION_STRING: "redis://:${REDIS_PASSWORD:-redis}@redis:6379"
-    ports:
-      - "${REDIS_HTTP_PORT:-8079}:80"
-    depends_on:
-      redis:
-        condition: service_healthy
+serverless-redis-http:
+  image: hiett/serverless-redis-http:latest
+  container_name: hono-app-redis-http
+  restart: unless-stopped
+  environment:
+    SRH_MODE: env
+    SRH_TOKEN: ${UPSTASH_REDIS_REST_TOKEN:-local_token}
+    SRH_CONNECTION_STRING: "redis://:${REDIS_PASSWORD:-redis}@redis:6379"
+  ports:
+    - "${REDIS_HTTP_PORT:-8079}:80"
+  depends_on:
+    redis:
+      condition: service_healthy
 
-  qstash:
-    image: public.ecr.aws/upstash/qstash:latest
-    container_name: hono-app-qstash
-    restart: unless-stopped
-    command: ["qstash", "dev"]
-    ports:
-      - "${QSTASH_PORT:-8080}:8080"
-      - "${QSTASH_LOG_PORT:-8081}:8081"
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
+qstash:
+  image: public.ecr.aws/upstash/qstash:latest
+  container_name: hono-app-qstash
+  restart: unless-stopped
+  command: ["qstash", "dev"]
+  ports:
+    - "${QSTASH_PORT:-8080}:8080"
+    - "${QSTASH_LOG_PORT:-8081}:8081"
+  extra_hosts:
+    - "host.docker.internal:host-gateway"
 
 # docker-compose.test.yml addition:
 
-  serverless-redis-http-test:
-    image: hiett/serverless-redis-http:latest
-    container_name: hono-app-redis-http-test
-    environment:
-      SRH_MODE: env
-      SRH_TOKEN: ${UPSTASH_REDIS_REST_TOKEN_TEST:-test_token}
-      SRH_CONNECTION_STRING: "redis://:${REDIS_PASSWORD:-redis}@redis-test:6379"
-    ports:
-      - "${REDIS_HTTP_PORT_TEST:-8078}:80"
-    depends_on:
-      redis-test:
-        condition: service_healthy
+serverless-redis-http-test:
+  image: hiett/serverless-redis-http:latest
+  container_name: hono-app-redis-http-test
+  environment:
+    SRH_MODE: env
+    SRH_TOKEN: ${UPSTASH_REDIS_REST_TOKEN_TEST:-test_token}
+    SRH_CONNECTION_STRING: "redis://:${REDIS_PASSWORD:-redis}@redis-test:6379"
+  ports:
+    - "${REDIS_HTTP_PORT_TEST:-8078}:80"
+  depends_on:
+    redis-test:
+      condition: service_healthy

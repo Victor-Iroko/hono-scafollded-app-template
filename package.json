@@ -70,7 +70,7 @@
       "oxlint --fix",
       "oxfmt --write"
     ],
-    "*.{json,md}": [
+    "*.{mjs,cjs,mts,cts,json,jsonc,json5,css,scss,less,pcss,postcss,graphql,gql,graphqls,toml,yml,yaml,markdown,mdx,html,htm,xhtml,vue,svelte,astro,hbs,handlebars,mjml}": [
       "oxfmt --write"
     ]
   }
