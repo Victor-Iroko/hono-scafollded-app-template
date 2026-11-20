@@ -240,9 +240,9 @@ rateLimiter.consume({
 
 ### 6.1 Database
 
-- **Client:** `PgClient.layer` with pool size, idle timeout, connect timeout, `applicationName` and statement timeout from config. The date/time type parsers come from the Drizzle docs, so Drizzle owns those types.
+- **Client:** `PgClient.layer` with pool size, idle timeout, connect timeout, `applicationName` and `statement_timeout` (startup parameter) from config. `@effect/sql-pg` v4 speaks the wire protocol itself and Drizzle's own codecs parse column types, so the `pg` package is only needed for Better Auth's pool.
 - **Service:** `Database` = `PgDrizzle.make({ relations })`. It uses `EffectLogger.layer` in development and the no-op logger in production.
-- **Transactions:** `SqlClient.withTransaction`. Nested service calls join the outer transaction automatically, so services don't need a `tx` argument. Verified in phase 2. If Drizzle's own `db.transaction` doesn't compose with it, services take an explicit `tx`.
+- **Transactions:** `db.transaction(...)` delegates to `SqlClient.withTransaction`, which is fiber-scoped: any `db` call made inside it, from any service, joins the transaction. Verified by an integration test, so services never take a `tx` argument.
 - **Migrations:** `drizzle-kit@rc generate` writes them, and `src/migrate.ts` runs `migrate()` from `drizzle-orm/effect-postgres/migrator`.
 
 ### 6.2 Redis
@@ -361,7 +361,7 @@ These close the gaps listed in `docs/production-backend-guide.md` §2:
 Each phase ends with `typecheck`, `lint` and its own tests green.
 
 1. ✅ **Skeleton:** dependencies, tsconfig, `config.ts`, `observability.ts`, and `main.ts` serving `/healthz` on `BunHttpServer`. Delete the old `src/`.
-2. **Database:** drizzle rc, the `Database` service, migrate entry, drizzle-kit config, the SQLSTATE mapping with tests, and a transaction-composition check.
+2. ✅ **Database:** drizzle rc, the `Database` service, migrate entry, drizzle-kit config, the SQLSTATE mapping with tests, and a transaction-composition check.
 3. **HTTP contract:** `HttpApi`, error schemas, middleware pipeline, health and readiness, docs routes.
 4. **Redis + rate limit:** both Redis layers, token-bucket middleware, circuit breaker.
 5. **Auth:** `BetterAuth` service, auth route, `Authenticated` middleware, the OpenAPI merge script.

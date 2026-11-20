@@ -9,7 +9,7 @@
     "format:check": "oxfmt --check",
     "typecheck": "tsc --noEmit",
     "db:generate": "drizzle-kit generate",
-    "db:migrate": "drizzle-kit migrate",
+    "db:migrate": "bun run src/migrate.ts",
     "db:push": "drizzle-kit push",
     "test": "bun test",
     "test:unit": "bun test tests/unit",

@@ -89,9 +89,11 @@ Configure the organization and instance in `fern/fern.config.json` and `fern/doc
 src/
   api/<module>/     <module>.api.ts (endpoints), .handlers.ts, .schema.ts, .service.ts
   http/             The HttpApi contract and the Bun HTTP server
-  platform/         Infrastructure services (observability, and later database, Redis, storage, mail)
+  platform/         Infrastructure services: observability, database (Drizzle on @effect/sql-pg)
+  db/               Drizzle schema, relations, and migrations
   config.ts         Every environment variable, grouped by domain
   main.ts           API entry point
+  migrate.ts        Applies migrations, then exits
 tests/              Unit and integration tests (bun test)
 observability/      OpenTelemetry collector config
 ```
