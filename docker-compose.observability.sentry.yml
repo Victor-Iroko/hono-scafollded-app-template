@@ -1,0 +1,9 @@
+# Adds Sentry as a second trace destination:
+#   SENTRY_OTLP_ENDPOINT=... SENTRY_PUBLIC_KEY=... \
+#   docker compose -f docker-compose.observability.yml -f docker-compose.observability.sentry.yml up -d
+services:
+  otel-collector:
+    command: ["--config=/etc/otel/collector.yml", "--config=/etc/otel/collector.sentry.yml"]
+    environment:
+      SENTRY_OTLP_ENDPOINT: ${SENTRY_OTLP_ENDPOINT:?set SENTRY_OTLP_ENDPOINT}
+      SENTRY_PUBLIC_KEY: ${SENTRY_PUBLIC_KEY:?set SENTRY_PUBLIC_KEY}

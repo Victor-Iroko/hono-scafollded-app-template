@@ -15,7 +15,18 @@ import {
   type S3ClientConfig,
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
-import { Cause, Context, Duration, Effect, Layer, Option, Redacted, Schema } from "effect";
+import {
+  Cause,
+  Context,
+  Duration,
+  Effect,
+  Exit,
+  Layer,
+  Metric,
+  Option,
+  Redacted,
+  Schema,
+} from "effect";
 import { StorageConfig } from "../config";
 
 export class StorageError extends Schema.TaggedError<StorageError>()("StorageError", {
@@ -37,6 +48,10 @@ export interface PresignOptions {
   readonly contentType?: string;
   readonly contentDisposition?: string;
 }
+
+const operationDuration = Metric.timer("storage.operation.duration", {
+  description: "Storage call duration by operation and outcome",
+});
 
 const isMissingBucket = (error: unknown) => {
   const failure = error as { name?: string; $metadata?: { httpStatusCode?: number } } | null;
@@ -117,21 +132,35 @@ export class Storage extends Context.Service<
 
       const timeout = Duration.millis(config.requestTimeoutMs);
       const call = <A>(operation: string, run: (signal: AbortSignal) => Promise<A>) =>
-        Effect.tryPromise({
-          try: run,
-          catch: (cause) => new StorageError({ operation, cause }),
-        }).pipe(
-          Effect.timeoutOrElse({
-            duration: timeout,
-            orElse: () =>
-              Effect.fail(
-                new StorageError({ operation, cause: new Error(`${operation} timed out`) }),
+        Effect.suspend(() => {
+          const startedAt = performance.now();
+          return Effect.tryPromise({
+            try: run,
+            catch: (cause) => new StorageError({ operation, cause }),
+          }).pipe(
+            Effect.timeoutOrElse({
+              duration: timeout,
+              orElse: () =>
+                Effect.fail(
+                  new StorageError({ operation, cause: new Error(`${operation} timed out`) }),
+                ),
+            }),
+            Effect.onExit((exit) =>
+              Metric.update(
+                Metric.withAttributes(operationDuration, {
+                  operation,
+                  outcome: Exit.isSuccess(exit) ? "success" : "error",
+                }),
+                Duration.millis(performance.now() - startedAt),
               ),
-          }),
+            ),
+          );
+        }).pipe(
           Effect.withSpan(`Storage.${operation}`, {
             attributes: { "storage.bucket": config.bucket },
           }),
         );
+
       const Bucket = config.bucket;
       const expiresIn = (options?: PresignOptions) => options?.expiresInS ?? config.presignExpiresS;
 

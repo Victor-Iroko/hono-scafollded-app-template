@@ -7,7 +7,7 @@ A production-minded API starter on [Bun](https://bun.sh) and [Hono](https://hono
 - Postgres + Drizzle ORM, Better Auth (email/password, Google, verification)
 - Redis-backed token-bucket rate limiting and durable jobs (Effect PersistedQueue) with a separate worker process
 - S3-compatible object storage, SMTP email with templates and a local inbox
-- Structured logging, OpenTelemetry, Prometheus metrics, Sentry
+- Structured logging, OpenTelemetry traces/logs/metrics, Sentry errors linked to traces
 - OpenAPI spec, Scalar API reference, and Fern documentation
 
 ## Requirements
@@ -91,7 +91,7 @@ src/
   main.ts           API entry point
   migrate.ts        Applies migrations, then exits
 tests/              Unit and integration tests (bun test)
-observability/      OpenTelemetry collector config
+observability/      OpenTelemetry collector config (Grafana LGTM, optional Sentry fan-out)
 ```
 
 ## Authentication
@@ -99,6 +99,13 @@ observability/      OpenTelemetry collector config
 [Better Auth](https://better-auth.com) serves sign-up, sign-in, sessions and Google OAuth at `/api/auth/*` (listed under the Auth tag in `/docs`). To protect a group of endpoints, add `.middleware(Authenticated)` to its `HttpApiGroup` and read the user in a handler with `yield* CurrentUser` (see `src/api/account` for `GET /v1/me`).
 
 The auth tables in `src/db/schema/auth.ts` mirror Better Auth's core schema. After enabling a Better Auth plugin that adds tables or fields, add them there and run `bun run db:generate`.
+
+## Observability
+
+- **Logs:** one JSON line per event in production (pretty locally), each tagged with `requestId`, `traceId` and `spanId`.
+- **OTLP:** with `OTEL_EXPORTER_OTLP_ENDPOINT` set, traces, logs and metrics are exported. Start a local stack with `docker compose -f docker-compose.observability.yml up -d`, set `OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318`, and open Grafana at http://localhost:3001.
+- **Sentry:** with `SENTRY_DSN` set, unexpected errors (HTTP 5xx, jobs that fail their last attempt, dropped emails) are reported with the trace id and request/job ids. Send traces to Sentry too by adding the collector overlay: `docker compose -f docker-compose.observability.yml -f docker-compose.observability.sentry.yml up -d` with `SENTRY_OTLP_ENDPOINT` and `SENTRY_PUBLIC_KEY`. Without an OTLP endpoint, the app sends traces and logs to Sentry directly.
+- **Metrics:** `http.server.request.duration`, `rate_limit.decisions`, `storage.operation.duration`, `jobs.processed`, `jobs.duration`, `email.delivered`.
 
 ## Error responses
 
@@ -119,4 +126,4 @@ Request validation failures are `400` problems with an `errors` array (`{ path, 
 - Point the load balancer's readiness check at `/readyz` and liveness at `/healthz`.
 - Use real S3 and SMTP credentials, and run the API and worker as separate processes.
 - Apply migrations with `bun run db:migrate` instead of `db:push`.
-- Point `OTEL_EXPORTER_OTLP_ENDPOINT` at your collector; start the local stack with `docker compose -f docker-compose.observability.yml up -d`.
+- Point `OTEL_EXPORTER_OTLP_ENDPOINT` at your collector and set `SENTRY_DSN`; add `observability/collector.sentry.yml` to the collector to send traces to Sentry too.

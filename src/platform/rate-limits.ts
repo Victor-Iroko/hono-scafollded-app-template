@@ -6,11 +6,17 @@
 // The store call is guarded: a 100 ms timeout, then a circuit breaker that
 // opens when Redis keeps failing. Callers get a decision, never an error, and
 // choose what "Unavailable" means for them (fail open or closed).
-import { Cause, Context, Duration, Effect, Exit, Layer, Stream } from "effect";
+import { Cause, Context, Duration, Effect, Exit, Layer, Metric, Stream } from "effect";
 import { CircuitBreaker, RateLimiter } from "effect/persistence";
 import { CacheRedis } from "./redis";
 
 const STORE_TIMEOUT = Duration.millis(100);
+
+// Attributed by decision only: keys contain client addresses (unbounded cardinality).
+const decisions = Metric.counter("rate_limit.decisions", {
+  description: "Rate-limit decisions (Allowed, Limited, Unavailable)",
+  incremental: true,
+});
 const BREAKER_KEY = "rate-limit-store";
 
 export interface ConsumeOptions {
@@ -59,7 +65,7 @@ export class RateLimits extends Context.Service<
         Effect.forkScoped,
       );
 
-      const consume = Effect.fn("RateLimits.consume")(function* (options: ConsumeOptions) {
+      const decide = Effect.fn("RateLimits.consume")(function* (options: ConsumeOptions) {
         const exit = yield* limiter
           .consume({
             algorithm: "token-bucket",
@@ -101,6 +107,11 @@ export class RateLimits extends Context.Service<
         }
         return { _tag: "Unavailable" } as const;
       });
+
+      const consume = (options: ConsumeOptions) =>
+        Effect.tap(decide(options), (decision) =>
+          Metric.update(Metric.withAttributes(decisions, { decision: decision._tag }), 1),
+        );
 
       return RateLimits.of({ consume });
     }),

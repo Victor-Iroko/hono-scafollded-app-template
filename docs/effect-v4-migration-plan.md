@@ -243,19 +243,20 @@ Errors are RFC 9457 problems (`application/problem+json`), using Effect's built-
 
 ### 6.3 Observability
 
-All telemetry leaves the process as OpenTelemetry, and Sentry also gets every error.
+All telemetry leaves the process as OpenTelemetry; Sentry also gets every unexpected error.
 
-| Signal  | Destination                                                                                                                                                                                                               |
-| ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Traces  | `Otlp.layer` sends them to `OTEL_EXPORTER_OTLP_ENDPOINT` (the collector). The collector fans out to your trace backend **and** to Sentry's OTLP ingest endpoint.                                                          |
-| Logs    | `Otlp.layer`, plus a console JSON logger (pretty in development) so container logs still work.                                                                                                                            |
-| Metrics | `Otlp.layer`, OTLP metrics only.                                                                                                                                                                                          |
-| Errors  | `Sentry.effectLayer`, which registers Sentry as an `ErrorReporter`. `SentryEffectExternalSpanLayer` stamps each error with the active trace id, so Sentry links the error to the trace it received through the collector. |
+| Signal  | Destination                                                                                                                                                                                                                  |
+| ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Traces  | `Otlp.layerJson` to `OTEL_EXPORTER_OTLP_ENDPOINT` (the collector), which fans out to Grafana LGTM and, with `observability/collector.sentry.yml`, to Sentry's OTLP endpoint.                                                 |
+| Logs    | Console (JSON in production) plus OTLP.                                                                                                                                                                                      |
+| Metrics | OTLP, exported every 10 s.                                                                                                                                                                                                   |
+| Errors  | `Sentry.effectLayer` registers Sentry as an `ErrorReporter`; `reportError` (`src/platform/observability.ts`) reports inside a Sentry scope carrying the active trace and span ids and the `requestId` / `job.*` annotations. |
 
-- **Fan-out in the collector:** an Effect runtime has exactly one `Tracer`. Fanning out in the collector keeps the app on a single tracer and sends traces to both destinations.
-- **Collector config:** `observability/otel-collector.yml` gains a Sentry `otlphttp` exporter. `docker-compose.observability.yml` swaps Prometheus for a trace UI (Jaeger) and keeps the collector.
-- **Without a collector:** if only `SENTRY_DSN` is set, the app uses `SentryEffectTracer` and `SentryEffectLogger` directly. If neither is set, only console logs.
-- **Metric names:** `http.server.*` comes from the built-in HTTP middleware, and SQL spans come from `@effect/sql`. The rest are custom: `storage.operations`, `email.sent`, `jobs.processed`, `jobs.dead_lettered`, `rate_limit.rejected`, `circuit_breaker.state`.
+- **One tracer:** an Effect runtime has exactly one `Tracer`, so fan-out happens in the collector. Without an OTLP endpoint, `SentryEffectTracer` and `SentryEffectLogger` send traces and logs to Sentry directly.
+- **Linking:** Sentry's own reporter only sees the `Cause`, so `reportError` adds the trace context. Verified from Bun: a 500 produced one Sentry envelope whose `trace_id` matched the trace the collector received, with the `requestId` tag equal to the response's `x-request-id`.
+- **Privacy:** `dataCollection` turns off user info, cookies, request bodies and query strings.
+- **Metrics:** `http.server.request.duration` (method, status code), `rate_limit.decisions` (decision), `storage.operation.duration` (operation, outcome), `jobs.processed` and `jobs.duration` (queue, outcome), `email.delivered` (outcome). Attributes are low-cardinality by design. Verified arriving from both the API and the worker through a collector.
+- **Local stack:** `docker-compose.observability.yml` runs the collector and `grafana/otel-lgtm` (Grafana on :3001); `docker-compose.observability.sentry.yml` adds the Sentry exporter. Both collector configs pass `otelcol validate`.
 
 ### 6.4 Auth (Better Auth)
 
@@ -347,7 +348,7 @@ Each phase ends with `typecheck`, `lint` and its own tests green.
 5. ✅ **Auth:** `BetterAuth` service, auth route, `Authenticated` middleware, the OpenAPI merge script.
 6. ✅ **Jobs + email:** `PersistedQueue` definitions, worker, `Mailer`, `html` templates, `EmailService`.
 7. ✅ **Integrations:** `Storage`, `PaystackClient`.
-8. **Sentry + OTLP:** collector fan-out config, a real Sentry event and trace checked from Bun.
+8. ✅ **Sentry + OTLP:** collector fan-out config, a real Sentry event and trace checked from Bun.
 9. **Tests, CI, Docker, docs:** README, AGENTS.md, the repo skills (backend rules, serverless conversion, customize template), the production guide scorecard, `.env.example`.
 
 ## 9. Risks

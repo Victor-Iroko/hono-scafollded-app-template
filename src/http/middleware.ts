@@ -1,12 +1,12 @@
 // The global request pipeline, outermost first:
 //
-//   client address → request id → access log → security headers → render failures
+//   client address → request id → access log + metrics → security headers → render failures
 //   → body limit → timeout → route
 //
 // Typed endpoint errors are already problem responses when they reach this
 // pipeline. What arrives as a failure is an unknown route, a request parse
 // error, or a defect; `renderFailures` turns those into problem responses too.
-import { ByteSize, Cause, Duration, Effect, ErrorReporter, Layer, Option } from "effect";
+import { ByteSize, Cause, Duration, Effect, Layer, Metric, Option } from "effect";
 import { IpNetwork } from "effect/net";
 import {
   HttpIncomingMessage,
@@ -18,6 +18,7 @@ import {
 } from "effect/http";
 import { AppConfig, HttpConfig } from "../config";
 import { classifyDatabaseError, databaseErrorLogContext } from "../platform/database.error";
+import { reportError } from "../platform/observability";
 import { problemFromDatabaseFailure, problemResponse, ServiceUnavailable } from "./errors";
 
 type HttpApp<E, R> = Effect.Effect<HttpServerResponse.HttpServerResponse, E, R>;
@@ -45,11 +46,18 @@ const withRequestId = <E, R>(app: HttpApp<E, R>) =>
     return HttpServerResponse.setHeader(response, REQUEST_ID_HEADER, requestId);
   });
 
-const logAccess = <E, R>(app: HttpApp<E, R>) =>
+// Method and status only: paths carry ids, which would explode metric cardinality.
+const requestDuration = Metric.timer("http.server.request.duration", {
+  description: "HTTP request duration by method and status code",
+});
+
+/** One access-log line and one duration sample per request. */
+const observeRequest = <E, R>(app: HttpApp<E, R>) =>
   Effect.gen(function* () {
     const request = yield* HttpServerRequest.HttpServerRequest;
     const startedAt = performance.now();
     const response = yield* app;
+    const durationMs = performance.now() - startedAt;
     const path = request.url.split("?")[0] ?? request.url;
     const log = QUIET_PATHS.has(path) ? Effect.logDebug : Effect.logInfo;
     yield* log("http request").pipe(
@@ -57,8 +65,15 @@ const logAccess = <E, R>(app: HttpApp<E, R>) =>
         "http.method": request.method,
         "http.path": path,
         "http.status": response.status,
-        "http.duration_ms": Math.round(performance.now() - startedAt),
+        "http.duration_ms": Math.round(durationMs),
       }),
+    );
+    yield* Metric.update(
+      Metric.withAttributes(requestDuration, {
+        "http.request.method": request.method,
+        "http.response.status_code": String(response.status),
+      }),
+      Duration.millis(durationMs),
     );
     return response;
   });
@@ -113,7 +128,7 @@ const renderFailures =
           yield* Effect.logError("unhandled error").pipe(
             Effect.annotateLogs({ error: databaseErrorLogContext(error, options) }),
           );
-          yield* ErrorReporter.report(cause);
+          yield* reportError(cause);
         }
         return response.body._tag === "Empty" ? problemResponse(response.status) : response;
       });
@@ -157,7 +172,7 @@ export const HttpMiddlewareLive = Layer.unwrap(
           withBodyLimit(http.maxBodyBytes),
           renderFailures({ includeDetail: !isProduction }),
           withSecurityHeaders({ strictTransportSecurity: isProduction }),
-          logAccess,
+          observeRequest,
           withRequestId,
           withClientAddress(trustedProxies),
         ),

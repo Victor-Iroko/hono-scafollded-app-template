@@ -5,18 +5,27 @@
 //   are logged and reported, then the job completes: retrying cannot help.
 // - Sends are throttled across every worker to EMAIL_RATE_PER_SECOND.
 // Recipient addresses are never logged.
-import { Cause, Duration, Effect, ErrorReporter } from "effect";
+import { Cause, Duration, Effect, Metric } from "effect";
 import { EmailConfig } from "../config";
 import { renderEmail } from "../integrations/email/templates";
 import { Mailer } from "../platform/mailer";
+import { reportError } from "../platform/observability";
 import { RateLimits } from "../platform/rate-limits";
 import type { JobContext } from "./consume";
 import type { SendEmail } from "./email.queue";
 
+const emailsDelivered = Metric.counter("email.delivered", {
+  description: "Emails by outcome: sent, or dropped as undeliverable",
+  incremental: true,
+});
+const countEmail = (outcome: "sent" | "dropped") =>
+  Metric.update(Metric.withAttributes(emailsDelivered, { outcome }), 1);
+
 const dropPermanently = (reason: string, cause: unknown) =>
   Effect.logError(`email dropped: ${reason}`).pipe(
     Effect.annotateLogs({ cause }),
-    Effect.andThen(ErrorReporter.report(Cause.fail(cause))),
+    Effect.andThen(reportError(Cause.fail(cause))),
+    Effect.andThen(countEmail("dropped")),
   );
 
 export const makeDeliverEmail = Effect.gen(function* () {
@@ -58,6 +67,7 @@ export const makeDeliverEmail = Effect.gen(function* () {
           ),
         );
       if (sent) {
+        yield* countEmail("sent");
         yield* Effect.logInfo("email sent").pipe(
           Effect.annotateLogs({ template: job.template, messageId: sent.messageId }),
         );

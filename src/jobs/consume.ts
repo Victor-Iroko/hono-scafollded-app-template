@@ -6,8 +6,9 @@
 // - Store fails (Redis down): logged, then the worker pauses and resumes.
 // - Shutdown interrupts the workers; an interrupted job is released and
 //   redelivered later.
-import { Cause, Context, Duration, Effect, ErrorReporter, Layer } from "effect";
+import { Cause, type Context, Duration, Effect, Exit, Layer, Metric } from "effect";
 import { PersistedQueue } from "effect/persistence";
+import { reportError } from "../platform/observability";
 import type { QueueOptions } from "./queue";
 
 export interface JobContext {
@@ -16,6 +17,12 @@ export interface JobContext {
 }
 
 const STORE_FAILURE_PAUSE = Duration.seconds(5);
+
+const jobsProcessed = Metric.counter("jobs.processed", {
+  description: "Job attempts by queue and outcome (completed, retried, failed)",
+  incremental: true,
+});
+const jobDuration = Metric.timer("jobs.duration", { description: "Job handler duration" });
 
 export const consume = <Self, A, E, R>(
   queue: Context.Key<Self, PersistedQueue.PersistedQueue<A>>,
@@ -27,8 +34,34 @@ export const consume = <Self, A, E, R>(
       const jobs = yield* queue;
       const { name, maxAttempts } = options;
 
+      const recordOutcome = (
+        exit: Exit.Exit<unknown, unknown>,
+        attempts: number,
+        startedAt: number,
+      ) => {
+        if (Exit.isFailure(exit) && Cause.hasInterruptsOnly(exit.cause)) return Effect.void;
+        const outcome = Exit.isSuccess(exit)
+          ? "completed"
+          : attempts < maxAttempts
+            ? "retried"
+            : "failed";
+        const attributes = { queue: name, outcome };
+        return Effect.andThen(
+          Metric.update(Metric.withAttributes(jobsProcessed, attributes), 1),
+          Metric.update(
+            Metric.withAttributes(jobDuration, attributes),
+            Duration.millis(performance.now() - startedAt),
+          ),
+        );
+      };
+
       const runJob = (job: A, { id, attempts }: { id: string; attempts: number }) =>
-        handler(job, { id, attempt: attempts }).pipe(
+        Effect.suspend(() => {
+          const startedAt = performance.now();
+          return handler(job, { id, attempt: attempts }).pipe(
+            Effect.onExit((exit) => recordOutcome(exit, attempts, startedAt)),
+          );
+        }).pipe(
           Effect.tapCause((cause) => {
             if (Cause.hasInterruptsOnly(cause)) return Effect.void;
             if (attempts < maxAttempts) {
@@ -38,7 +71,7 @@ export const consume = <Self, A, E, R>(
             }
             return Effect.logError("job failed permanently").pipe(
               Effect.annotateLogs({ cause }),
-              Effect.andThen(ErrorReporter.report(cause)),
+              Effect.andThen(reportError(cause)),
             );
           }),
           Effect.annotateLogs({ "job.queue": name, "job.id": id, "job.attempt": attempts }),
