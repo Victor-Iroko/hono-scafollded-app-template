@@ -88,6 +88,7 @@ Configure the organization and instance in `fern/fern.config.json` and `fern/doc
 ```
 src/
   api/<module>/     <module>.api.ts (endpoints), .handlers.ts, .schema.ts, .service.ts
+  auth/             Better Auth service, /api/auth/* route, Authenticated middleware
   http/             The HttpApi contract and the Bun HTTP server
   platform/         Infrastructure services: observability, database (Drizzle on @effect/sql-pg),
                     Redis (cache + jobs), token-bucket rate limits
@@ -98,6 +99,12 @@ src/
 tests/              Unit and integration tests (bun test)
 observability/      OpenTelemetry collector config
 ```
+
+## Authentication
+
+[Better Auth](https://better-auth.com) serves sign-up, sign-in, sessions and Google OAuth at `/api/auth/*` (listed under the Auth tag in `/docs`). To protect a group of endpoints, add `.middleware(Authenticated)` to its `HttpApiGroup` and read the user in a handler with `yield* CurrentUser` (see `src/api/account` for `GET /v1/me`).
+
+The auth tables in `src/db/schema/auth.ts` mirror Better Auth's core schema. After enabling a Better Auth plugin that adds tables or fields, add them there and run `bun run db:generate`.
 
 ## Error responses
 

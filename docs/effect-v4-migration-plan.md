@@ -259,13 +259,14 @@ All telemetry leaves the process as OpenTelemetry, and Sentry also gets every er
 
 ### 6.4 Auth (Better Auth)
 
-- **`BetterAuth` service:** builds the Better Auth instance inside `make`.
-  - **Its own pool:** a small dedicated `pg.Pool` with `drizzle-orm/node-postgres` from the same rc, because the adapter needs Promises. The pool is closed by a finalizer.
-  - **Callbacks:** it captures the current context with `Effect.context()`, so callbacks run Effects through `Effect.runPromiseWith(context)`. The welcome, verify and reset hooks call `EmailService.enqueue` directly, with no dynamic `import()` workaround.
-  - **Rate-limit storage:** the same token-bucket `RateLimiter` service.
-- **Route:** `/api/auth/*` converts the request to a web `Request` (`HttpServerRequest.toWeb`), calls `auth.handler`, and converts the result back with `HttpServerResponse.fromWeb`.
-- **Middleware:** `Authenticated` is an `HttpApiMiddleware` with a cookie security scheme. It provides `CurrentUser` and `CurrentSession`, and `OptionalSession` is the non-failing variant. Handlers read `yield* CurrentUser`, which replaces `getSessionUser(c)`.
-- **OpenAPI:** `scripts/openapi.ts` merges `OpenApi.fromApi(Api)` with Better Auth's generated schema (tagged `Auth`) into `openapi.json`.
+- **`BetterAuth` service** (`src/auth/auth.ts`): `createAuth` is a pure factory (also used by `scripts/openapi.ts` with `drizzle.mock()`); the layer builds it on a small dedicated `pg.Pool` with `drizzle-orm/node-postgres` (the adapter is Promise-based), closed by a finalizer.
+- **Callbacks** run Effects through the context the layer captured: rate-limit storage uses the shared token-bucket `RateLimits` (fails open), Better Auth's log lines go to the Effect logger (message only), and auth emails go to `sendEmail`, which phase 6 points at the email queue.
+- **Client IP:** the auth route strips any incoming `x-client-ip` and sets it from the address the HTTP pipeline resolved (`TRUSTED_PROXIES` aware); Better Auth reads only that header.
+- **Route:** `/api/auth/*` bridges to `auth.handler` with `HttpServerRequest.toWeb` / `HttpServerResponse.fromWeb`.
+- **Middleware:** `Authenticated` (cookie security scheme in OpenAPI) resolves the session from the request headers and provides `CurrentUser` and `CurrentSession`; no session is a 401 problem.
+- **Example module:** `src/api/account` serves `GET /v1/me`, versioned, rate limited and authenticated.
+- **Schema:** `src/db/schema/auth.ts` mirrors Better Auth's core tables with `timestamptz` columns; the first migration is `src/db/migrations/*_auth`.
+- **OpenAPI:** `/openapi.json`, `/docs` (Scalar from jsDelivr, pinned) and `/llms.txt` serve the HttpApi document merged with Better Auth's, tagged `Auth`. Verified with an end-to-end test (sign-up, session cookie, `/v1/me`, wrong password, duplicate email).
 
 ### 6.5 Jobs (PersistedQueue)
 
@@ -354,7 +355,7 @@ Each phase ends with `typecheck`, `lint` and its own tests green.
 2. ✅ **Database:** drizzle rc, the `Database` service, migrate entry, drizzle-kit config, the SQLSTATE mapping with tests, and a transaction-composition check.
 3. ✅ **HTTP contract:** `HttpApi`, error schemas, middleware pipeline, health and readiness, docs routes.
 4. ✅ **Redis + rate limit:** both Redis layers, token-bucket middleware, circuit breaker.
-5. **Auth:** `BetterAuth` service, auth route, `Authenticated` middleware, the OpenAPI merge script.
+5. ✅ **Auth:** `BetterAuth` service, auth route, `Authenticated` middleware, the OpenAPI merge script.
 6. **Jobs + email:** `PersistedQueue` definitions, worker, `Mailer`, `html` templates, `EmailService`.
 7. **Integrations:** `Storage`, `PaystackClient`.
 8. **Sentry + OTLP:** collector fan-out config, a real Sentry event and trace checked from Bun.

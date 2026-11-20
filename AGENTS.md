@@ -26,6 +26,7 @@
 - Define services with `Context.Service` and give each one a `static readonly layer` that already provides the service's own dependencies, so callers never wire them.
 - Use `Effect.fn("<Service>.<method>")` for service methods, `Schema.TaggedError` for failures, and `Effect.acquireRelease` for resources. No `globalThis` caches or module-level singletons.
 - Read environment variables only through the `Config` groups in `src/config.ts`.
+- Protect endpoints with `.middleware(Authenticated)` on the group and read the user with `yield* CurrentUser` (`src/auth/auth.middleware.ts`); check resource ownership in the service.
 
 ## Tests
 

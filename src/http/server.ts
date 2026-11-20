@@ -2,7 +2,10 @@ import { BunHttpServer } from "@effect/platform-bun";
 import { Duration, Effect, Layer } from "effect";
 import { HttpRouter } from "effect/http";
 import { HttpApiBuilder, HttpApiMiddleware } from "effect/http-api";
+import { AccountHandlers } from "../api/account/account.handlers";
 import { HealthHandlers } from "../api/health/health.handlers";
+import { Authenticated } from "../auth/auth.middleware";
+import { AuthRoute } from "../auth/auth.route";
 import { HttpConfig } from "../config";
 import { Api } from "./api";
 import { DocsLive } from "./docs";
@@ -11,18 +14,19 @@ import { RateLimit } from "./rate-limit";
 import { ShutdownSignal } from "./shutdown";
 
 const ApiLive = HttpApiBuilder.layer(Api).pipe(
-  Layer.provide([HealthHandlers]),
+  Layer.provide([HealthHandlers, AccountHandlers]),
   // API middleware must be visible while the routes are built.
   Layer.provideMerge(
     Layer.mergeAll(
       HttpApiMiddleware.layerProblemDetails({ includeDetails: true }),
       RateLimit.layer,
+      Authenticated.layer,
     ),
   ),
 );
 
 /** Every route plus the global middleware, without a server (tests use this). */
-export const AppRoutes = Layer.mergeAll(ApiLive, DocsLive, HttpMiddlewareLive);
+export const AppRoutes = Layer.mergeAll(ApiLive, AuthRoute, DocsLive, HttpMiddlewareLive);
 
 // Built after the server, so its finalizer runs first on shutdown: /readyz
 // starts failing, the grace period lets load balancers notice, and only then

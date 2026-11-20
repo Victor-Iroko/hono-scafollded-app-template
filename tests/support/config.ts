@@ -15,6 +15,8 @@ export const testConfig = (env: Record<string, string> = {}) =>
         DATABASE_URL: TEST_DATABASE_URL,
         REDIS_URL: TEST_REDIS_URL,
         REDIS_JOBS_URL: TEST_REDIS_URL,
+        BETTER_AUTH_SECRET: "test-only-secret-with-at-least-32-characters",
+        BETTER_AUTH_URL: "http://localhost:3000",
         ...env,
       },
     }),

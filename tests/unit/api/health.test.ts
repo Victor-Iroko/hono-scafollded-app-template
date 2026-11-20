@@ -4,7 +4,18 @@ import { HttpServer } from "effect/http";
 import { HttpApiMiddleware, HttpApiTest } from "effect/http-api";
 import { HealthHandlersNoDeps } from "../../../src/api/health/health.handlers";
 import { HealthService, type Readiness } from "../../../src/api/health/health.service";
+import { Authenticated } from "../../../src/auth/auth.middleware";
 import { Api } from "../../../src/http/api";
+import { RateLimit } from "../../../src/http/rate-limit";
+
+// The health group uses neither; the in-memory client still builds the whole API.
+const UnusedApiMiddleware = Layer.mergeAll(
+  Layer.succeed(
+    RateLimit,
+    RateLimit.of((httpEffect) => httpEffect),
+  ),
+  Layer.succeed(Authenticated, Authenticated.of({ sessionCookie: () => Effect.die("unused") })),
+);
 
 const healthy: Readiness = {
   ok: true,
@@ -29,7 +40,9 @@ const callHealthApi = <A, E>(
               HealthService.of({ readiness: Effect.succeed(readiness) }),
             ),
           ),
-          Layer.provideMerge(HttpApiMiddleware.layerProblemDetails()),
+          Layer.provideMerge(
+            Layer.mergeAll(HttpApiMiddleware.layerProblemDetails(), UnusedApiMiddleware),
+          ),
         ),
         HttpServer.layerServices,
       ),
