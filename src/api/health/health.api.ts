@@ -1,5 +1,6 @@
 import { HttpApiEndpoint, HttpApiGroup, OpenApi } from "effect/http-api";
-import { HealthResponse } from "./health.schema";
+import { NotReady } from "./health.error";
+import { HealthResponse, ReadyResponse } from "./health.schema";
 
 export class HealthApi extends HttpApiGroup.make("health", { topLevel: true })
   .add(
@@ -7,5 +8,9 @@ export class HealthApi extends HttpApiGroup.make("health", { topLevel: true })
       OpenApi.Summary,
       "Check whether the process is alive",
     ),
+    HttpApiEndpoint.get("getReadiness", "/readyz", {
+      success: ReadyResponse,
+      error: NotReady,
+    }).annotate(OpenApi.Summary, "Check whether the service can take traffic"),
   )
   .annotate(OpenApi.Description, "Liveness and readiness probes.") {}

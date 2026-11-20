@@ -98,10 +98,22 @@ tests/              Unit and integration tests (bun test)
 observability/      OpenTelemetry collector config
 ```
 
+## Error responses
+
+Every error is an [RFC 9457](https://www.rfc-editor.org/rfc/rfc9457) problem served as `application/problem+json`:
+
+```json
+{ "type": "about:blank", "title": "Conflict", "status": 409, "detail": "Resource already exists" }
+```
+
+Request validation failures are `400` problems with an `errors` array (`{ path, message }` per invalid field). Endpoint errors are declared in each module's `*.api.ts` using the classes in `src/http/errors.ts`, so they appear in OpenAPI and the typed client. Every response carries an `x-request-id` header that also tags its log lines.
+
 ## Before deploying
 
 - Replace every development credential and secret in `.env`.
-- Set `DOCS_ENABLED=false` and enable `METRICS_TOKEN` (or keep `/metrics` private).
+- Keep `DOCS_ENABLED` unset in production unless the API reference should be public.
+- Set `TRUSTED_ORIGINS` to the browser origins that call the API.
+- Point the load balancer's readiness check at `/readyz` and liveness at `/healthz`.
 - Use real S3 and SMTP credentials, and run the API and worker as separate processes.
 - Apply migrations with `bun run db:migrate` instead of `db:push`.
 - Point `OTEL_EXPORTER_OTLP_ENDPOINT` at your collector; start the local stack with `docker compose -f docker-compose.observability.yml up -d`.

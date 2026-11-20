@@ -3,6 +3,7 @@
   "scripts": {
     "dev": "bun run --watch src/main.ts",
     "start": "bun run src/main.ts",
+    "openapi:generate": "bun run scripts/openapi.ts && bunx oxfmt openapi.json",
     "prepare": "husky",
     "lint": "oxlint",
     "format": "oxfmt --write",

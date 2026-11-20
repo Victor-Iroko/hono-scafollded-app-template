@@ -21,6 +21,23 @@ export const AppConfig = Config.all({
 export const HttpConfig = Config.all({
   host: Config.String("HOST").pipe(Config.withDefault("0.0.0.0")),
   port: Config.Port("PORT").pipe(Config.withDefault(3000)),
+  // Browser origins allowed to make credentialed requests, comma-separated.
+  trustedOrigins: Config.Array(Schema.String, "TRUSTED_ORIGINS", { separator: "," }).pipe(
+    Config.withDefault([]),
+  ),
+  maxBodyBytes: intInRange(
+    "HTTP_MAX_BODY_BYTES",
+    { minimum: 1_024, maximum: 104_857_600 },
+    1_048_576,
+  ),
+  requestTimeoutMs: intInRange(
+    "HTTP_REQUEST_TIMEOUT_MS",
+    { minimum: 1_000, maximum: 300_000 },
+    30_000,
+  ),
+  // How long /readyz reports 503 before the server stops, so load balancers stop routing first.
+  shutdownGraceMs: intInRange("HTTP_SHUTDOWN_GRACE_MS", { minimum: 0, maximum: 120_000 }, 5_000),
+  docsEnabled: Config.Boolean("DOCS_ENABLED").pipe(Config.withDefault(false)),
 });
 
 export const ObservabilityConfig = Config.all({

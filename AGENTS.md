@@ -18,6 +18,7 @@
 - Declare the module's endpoints as an `HttpApiGroup` in `<module>.api.ts` and add the group to `src/http/api.ts`.
 - Keep `<module>.handlers.ts` thin: map each endpoint to a service call with `HttpApiBuilder.group`.
 - Define the module's request/response schemas with `effect/Schema` in `<module>.schema.ts`.
+- Fail handlers with the problem classes in `src/http/errors.ts` (or a module-specific `HttpApiError.Problem` in `<module>.error.ts`) and declare them in the endpoint's `error` option.
 - Put the module's business logic and data operations in `<module>.service.ts`; keep that logic out of the handlers.
 
 ## Services and layers

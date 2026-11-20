@@ -196,8 +196,8 @@ Request flow through an `api` module:
 
 ### 5.1 Pipeline order
 
-1. **Request id:** `x-request-id` is read or generated, echoed back, and added as a log annotation and span attribute.
-2. **Tracing and access log:** `HttpMiddleware.tracer` and `HttpMiddleware.logger`, both built in.
+1. **Request id:** `x-request-id` is read or generated, echoed back, and added as a log annotation and span attribute, along with the trace and span ids.
+2. **Tracing and access log:** the built-in server span, plus our own access log (health probes log at debug level). The built-in logger is disabled.
 3. **Security headers + CORS:** CORS uses the same trusted-origin list as Better Auth.
 4. **Body limit + timeout:** body size limit and a per-request `Effect.timeout`, which returns 503.
 5. **Unprotected routes:** `/healthz` and `/readyz`, outside the rate limiter. `/readyz` caches its probes for 2 s.
@@ -207,14 +207,13 @@ Request flow through an `api` module:
 
 ### 5.2 Error contract
 
-The current JSON body stays, so clients don't break:
-`{ success: false, error: { code, message, fields?, details? }, requestId, path }`.
+Errors are RFC 9457 problems (`application/problem+json`), using Effect's built-in `HttpApiError.Problem` and `HttpApiMiddleware.ProblemDetails`. This replaces the old `{ success: false, error: {...} }` envelope.
 
-- **Shared errors:** `Schema.TaggedError` classes with an `httpApiStatus` annotation: `BadRequest`, `Unauthorized`, `SessionExpired`, `Forbidden`, `NotFound`, `Conflict`, `ValidationFailed`, `TooManyRequests`, `ServiceUnavailable`, `InternalServerError`. They are declared on the `HttpApi`, so they appear in OpenAPI and in the typed client.
-- **Invalid input:** request decode failures become `ValidationFailed` with up to 20 `fields`.
-- **Database errors:** `database.error.ts` ports the SQLSTATE tables. It unwraps `EffectDrizzleQueryError` / `SqlError` to reach the pg error and never logs `params`.
-- **Unmapped failures and defects:** a 500 with a generic message in production. They are reported through `Effect.withErrorReporting`, so they reach Sentry. 4xx errors are annotated `ErrorReporter.ignore`.
-- **Other responses:** one outer middleware formats 404, 405 and anything else that escaped, so every error has the same shape.
+- **Shared problems:** `src/http/errors.ts` defines `BadRequest`, `Unauthorized`, `Forbidden`, `NotFound`, `Conflict`, `ValidationFailed` (422 with `errors`), `TooManyRequests`, `InternalServerError` and `ServiceUnavailable`. Endpoints declare the ones they return, so they appear in OpenAPI and in the typed client.
+- **Invalid input:** `ProblemDetails` turns request decode failures into a 400 problem whose `errors` lists `{ path, message }` per field, with the first path segment naming the slot (`payload`, `query`, ...).
+- **Database errors:** a defect or failure carrying a Postgres error is classified by `database.error.ts` and answered with the matching problem (409, 422, 400, 503), so services may `Effect.orDie` database errors and still give the client the right status.
+- **Unknown routes, parse errors, defects:** `renderFailures` in `src/http/middleware.ts` renders them as problems. 5xx are logged with the cause and passed to `ErrorReporter.report`, so they reach Sentry. Defect messages never reach the client.
+- **Request id:** `x-request-id` is in the response headers and on every log line of the request, not in the body. A wrong method on a known path is a 404; the router has no 405.
 
 ### 5.3 Rate limiting: token bucket
 
@@ -362,7 +361,7 @@ Each phase ends with `typecheck`, `lint` and its own tests green.
 
 1. ✅ **Skeleton:** dependencies, tsconfig, `config.ts`, `observability.ts`, and `main.ts` serving `/healthz` on `BunHttpServer`. Delete the old `src/`.
 2. ✅ **Database:** drizzle rc, the `Database` service, migrate entry, drizzle-kit config, the SQLSTATE mapping with tests, and a transaction-composition check.
-3. **HTTP contract:** `HttpApi`, error schemas, middleware pipeline, health and readiness, docs routes.
+3. ✅ **HTTP contract:** `HttpApi`, error schemas, middleware pipeline, health and readiness, docs routes.
 4. **Redis + rate limit:** both Redis layers, token-bucket middleware, circuit breaker.
 5. **Auth:** `BetterAuth` service, auth route, `Authenticated` middleware, the OpenAPI merge script.
 6. **Jobs + email:** `PersistedQueue` definitions, worker, `Mailer`, `html` templates, `EmailService`.
