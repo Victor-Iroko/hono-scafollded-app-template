@@ -270,24 +270,13 @@ All telemetry leaves the process as OpenTelemetry, and Sentry also gets every er
 
 ### 6.5 Jobs (PersistedQueue)
 
-```ts
-// src/jobs/queues.ts
-export const EmailQueue = defineQueue({
-  name: "email",
-  payload: SendEmailPayload, // Schema, validated on offer and on take
-  concurrency: 10,
-  maxAttempts: 3,
-  retry: Schedule.exponential("1 second").pipe(Schedule.jittered),
-  throughput: { limit: 10, window: "1 second" }, // relay ceiling, token bucket
-});
-```
-
-- **Producers:** `yield* EmailQueue.offer(payload, { id })`. The `id` is the idempotency key, and `deduplicate: "untilExecuted"` collapses double enqueues.
-- **`WorkerLive`:** starts `concurrency` fibers per queue, each looping `take(handler)`. A handler runs in a span annotated with `job.id`, `job.attempt` and `queue`.
-- **Throughput:** limited with `RateLimiter.consume({ algorithm: "token-bucket", onExceeded: "delay" })`.
-- **Dead letter:** when `isDeadLetterCause(cause)` is true, the job is logged at error level, reported to Sentry, and counted in `jobs.dead_lettered`. The payload stays in Redis for inspection.
-- **Cleanup:** `PersistedQueue.layerCleanup` runs in the worker.
-- **Dashboard:** Bull Board goes away. The README documents inspecting queues through `redis-cli` and the metrics instead.
+- **Queues** (`src/jobs/queue.ts`): `queueLayer(Tag, PayloadSchema, { name, maxAttempts })` builds a `PersistedQueue` on the jobs Redis (`jobs:` prefix) with exponential backoff from 2 s, capped at 10 minutes. A queue is a `Context.Service` declared next to its payload schema (`src/jobs/email.queue.ts`).
+- **Producers:** `queue.offer(payload, { id })`; the id is an idempotency key (kept 30 days after completion).
+- **Workers** (`src/jobs/consume.ts`): `consume(Queue, { ...Queue.options, concurrency }, handler)` runs N fibers looping `take`. Each job gets a span and log annotations (`job.queue`, `job.id`, `job.attempt`). Failures before the last attempt log a warning; the last logs an error and goes to `ErrorReporter` (Sentry). A store failure pauses the worker for 5 s. Shutdown interrupts workers and the job is redelivered.
+- **Dead letters:** jobs that exhaust their attempts stay in Redis (`layerCleanup` keeps failed jobs, removes completed ones after 30 days).
+- **Worker process:** `src/worker.ts` launches `WorkerLive` (`src/jobs/worker.ts`).
+- **Email:** `EmailService.enqueue` validates against the template schema and offers to `EmailQueue`. The job renders, waits for a slot in a shared token bucket (`EMAIL_RATE_PER_SECOND`), and sends through `Mailer` (nodemailer). Transient failures retry; 5xx rejections and stale data are logged, reported and completed. Recipient addresses are never logged.
+- **Auth emails:** Better Auth's welcome, verification and reset emails go through `EmailService`; the welcome email is keyed by user id. Verified live: sign-up succeeds with the relay down, the job retries, and the email is delivered once Mailpit is back.
 
 ### 6.6 Storage (S3)
 
@@ -356,7 +345,7 @@ Each phase ends with `typecheck`, `lint` and its own tests green.
 3. ✅ **HTTP contract:** `HttpApi`, error schemas, middleware pipeline, health and readiness, docs routes.
 4. ✅ **Redis + rate limit:** both Redis layers, token-bucket middleware, circuit breaker.
 5. ✅ **Auth:** `BetterAuth` service, auth route, `Authenticated` middleware, the OpenAPI merge script.
-6. **Jobs + email:** `PersistedQueue` definitions, worker, `Mailer`, `html` templates, `EmailService`.
+6. ✅ **Jobs + email:** `PersistedQueue` definitions, worker, `Mailer`, `html` templates, `EmailService`.
 7. **Integrations:** `Storage`, `PaystackClient`.
 8. **Sentry + OTLP:** collector fan-out config, a real Sentry event and trace checked from Bun.
 9. **Tests, CI, Docker, docs:** README, AGENTS.md, the repo skills (backend rules, serverless conversion, customize template), the production guide scorecard, `.env.example`.

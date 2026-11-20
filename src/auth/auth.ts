@@ -14,6 +14,7 @@ import { Context, Duration, Effect, Layer, Option, Redacted } from "effect";
 import { Pool } from "pg";
 import { AppConfig, AuthConfig, DatabaseConfig, HttpConfig } from "../config";
 import * as authSchema from "../db/schema/auth";
+import { EmailService, type EnqueueEmail } from "../integrations/email/email.service";
 import { RateLimits } from "../platform/rate-limits";
 
 export const AUTH_BASE_PATH = "/api/auth";
@@ -25,22 +26,10 @@ export const AUTH_BASE_PATH = "/api/auth";
  */
 export const CLIENT_IP_HEADER = "x-client-ip";
 
-export type AuthEmail =
-  | {
-      readonly template: "welcome";
-      readonly to: string;
-      readonly data: { name: string; loginUrl: string };
-    }
-  | {
-      readonly template: "verifyEmail";
-      readonly to: string;
-      readonly data: { name: string; verifyUrl: string; expiresInMinutes: number };
-    }
-  | {
-      readonly template: "passwordReset";
-      readonly to: string;
-      readonly data: { name: string; resetUrl: string; expiresInMinutes: number };
-    };
+/** An email Better Auth asks us to send; `data` holds tokens, so it is never logged. */
+export type AuthEmail = {
+  [N in "welcome" | "verifyEmail" | "passwordReset"]: EnqueueEmail<N> & { readonly to: string };
+}["welcome" | "verifyEmail" | "passwordReset"];
 
 export interface AuthOptions {
   readonly baseUrl: string;
@@ -118,6 +107,7 @@ export function createAuth(db: NodePgDatabase<any>, options: AuthOptions) {
           after: async (user) => {
             await options.sendEmail({
               template: "welcome",
+              idempotencyKey: `welcome:${user.id}`,
               to: user.email,
               data: { name: user.name, loginUrl: baseURL },
             });
@@ -174,6 +164,7 @@ export class BetterAuth extends Context.Service<BetterAuth, AppAuth>()("app/Bett
       const database = yield* DatabaseConfig;
       const http = yield* HttpConfig;
       const limits = yield* RateLimits;
+      const emails = yield* EmailService;
       const context = yield* Effect.context<never>();
       const run = Effect.runPromiseWith(context);
 
@@ -216,14 +207,19 @@ export class BetterAuth extends Context.Service<BetterAuth, AppAuth>()("app/Bett
         // Message only: Better Auth's extra arguments can include emails and payloads.
         log: (level, message) =>
           void run(logAtLevel[level](message).pipe(Effect.annotateLogs({ source: "better-auth" }))),
-        // Email delivery is wired in the jobs phase. Never log `data`: it holds tokens.
+        // A queue failure must not fail sign-up; it is logged (without `data`) instead.
         sendEmail: (email) =>
           run(
-            Effect.logWarning("auth email not sent: email delivery is not configured").pipe(
-              Effect.annotateLogs({ template: email.template }),
+            emails.enqueue(email).pipe(
+              Effect.asVoid,
+              Effect.catchTag("EmailEnqueueError", (error) =>
+                Effect.logError("auth email not queued").pipe(
+                  Effect.annotateLogs({ template: email.template, cause: error.cause }),
+                ),
+              ),
             ),
           ),
       });
     }),
-  ).pipe(Layer.provide(RateLimits.layer));
+  ).pipe(Layer.provide([RateLimits.layer, EmailService.layer]));
 }

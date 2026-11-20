@@ -20,7 +20,11 @@ const UnusedApiMiddleware = Layer.mergeAll(
 const healthy: Readiness = {
   ok: true,
   draining: false,
-  checks: { database: { ok: true, latencyMs: 1 }, redis: { ok: true, latencyMs: 1 } },
+  checks: {
+    database: { ok: true, latencyMs: 1 },
+    cacheRedis: { ok: true, latencyMs: 1 },
+    jobsRedis: { ok: true, latencyMs: 1 },
+  },
 };
 
 const callHealthApi = <A, E>(

@@ -9,7 +9,8 @@ export const DependencyCheck = Schema.Struct({
 
 export const DependencyChecks = Schema.Struct({
   database: DependencyCheck,
-  redis: DependencyCheck,
+  cacheRedis: DependencyCheck,
+  jobsRedis: DependencyCheck,
 });
 
 export const ReadyResponse = Schema.Struct({

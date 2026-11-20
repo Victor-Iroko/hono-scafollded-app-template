@@ -107,3 +107,17 @@ export const AuthConfig = Config.all({
   // Better Auth's adapter is Promise-based, so it keeps its own small pool.
   poolMax: intInRange("AUTH_DB_POOL_MAX", { minimum: 1, maximum: 50 }, 5),
 });
+
+export const EmailConfig = Config.all({
+  // smtp://host:port or smtps://host:465; tuneables go in the query, e.g. ?pool=true
+  smtpUrl: Config.Redacted("SMTP_URL"),
+  // Relay credentials: set both or neither. Injected into SMTP_URL, so no escaping is needed.
+  smtpUser: Config.option(Config.String("SMTP_USER")),
+  smtpPassword: Config.option(Config.Redacted("SMTP_PASSWORD")),
+  from: Config.String("EMAIL_FROM"),
+  replyTo: Config.option(Config.String("EMAIL_REPLY_TO")),
+  sendTimeoutMs: intInRange("SMTP_SEND_TIMEOUT_MS", { minimum: 1_000, maximum: 300_000 }, 30_000),
+  // Stay under the relay's ceiling; enforced across every worker through Redis.
+  ratePerSecond: intInRange("EMAIL_RATE_PER_SECOND", { minimum: 1, maximum: 10_000 }, 10),
+  workerConcurrency: intInRange("EMAIL_WORKER_CONCURRENCY", { minimum: 1, maximum: 100 }, 10),
+});

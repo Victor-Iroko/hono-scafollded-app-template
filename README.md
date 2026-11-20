@@ -5,7 +5,7 @@
 A production-minded API starter on [Bun](https://bun.sh) and [Hono](https://hono.dev), with the boilerplate most services need already wired up:
 
 - Postgres + Drizzle ORM, Better Auth (email/password, Google, verification)
-- Redis-backed rate limiting and BullMQ jobs with a separate worker process
+- Redis-backed token-bucket rate limiting and durable jobs (Effect PersistedQueue) with a separate worker process
 - S3-compatible object storage, SMTP email with templates and a local inbox
 - Structured logging, OpenTelemetry, Prometheus metrics, Sentry
 - OpenAPI spec, Scalar API reference, and Fern documentation
@@ -25,9 +25,9 @@ bun run db:push            # create tables
 bun run dev                # API on http://localhost:3000
 ```
 
-Run the API and job worker together with `bun run dev:all`, or the worker alone with `bun run worker`.
+Run the API and job worker together with `bun run dev:all`, or the worker alone with `bun run dev:worker`.
 
-API docs are served when `DOCS_ENABLED=true` in `.env`. Health and metrics endpoints are always available.
+API docs are served when `DOCS_ENABLED=true` in `.env`. Health endpoints are always available.
 
 | URL             | Description                        |
 | --------------- | ---------------------------------- |
@@ -36,27 +36,15 @@ API docs are served when `DOCS_ENABLED=true` in `.env`. Health and metrics endpo
 | `/llms.txt`     | API reference as Markdown for LLMs |
 | `/healthz`      | Liveness check                     |
 | `/readyz`       | Dependency readiness check         |
-| `/metrics`      | Prometheus metrics                 |
 
 ## API and jobs
 
-- Add API domains under `src/api/<module>/` using the `router` / `schema` / `service` split.
-- Define BullMQ queues and job handlers in `src/jobs/index.ts`; the worker runs them from `src/worker.ts`.
-- Regenerate `openapi.json` after changing routes:
+- Add API domains under `src/api/<module>/` (`*.api.ts`, `*.handlers.ts`, `*.schema.ts`, `*.service.ts`) and add the group to `src/http/api.ts`.
+- Regenerate `openapi.json` after changing routes: `bun run openapi:generate`.
+- Background work runs on durable queues in the jobs Redis (`src/jobs`). Delivery is at least once, so handlers must be idempotent. To add a queue: declare it like `src/jobs/email.queue.ts`, write its handler, and add a `consume(...)` line to `src/jobs/worker.ts`.
+- Send email with `EmailService.enqueue({ template, to, data })`; templates live in `src/integrations/email/templates.ts`. Failed sends retry with backoff; permanent rejections are logged and reported instead.
 
-```sh
-bun run openapi:generate
-```
-
-## Queue dashboard
-
-Inspect BullMQ jobs (Redis on port `6381`) with Bull Board:
-
-```sh
-bunx @bull-board/cli -r redis://:redis@localhost:6381/0 -p 4000
-```
-
-Then open http://localhost:4000.
+Jobs that fail every attempt stay in Redis under `jobs:<queue>` as the dead-letter record, are logged at error level and reported to Sentry. Inspect them with `redis-cli -p 6381 -a redis`.
 
 ## Fern documentation
 
@@ -72,16 +60,18 @@ Configure the organization and instance in `fern/fern.config.json` and `fern/doc
 
 ## Scripts
 
-| Command                                  | Description                               |
-| ---------------------------------------- | ----------------------------------------- |
-| `bun run dev`                            | Start the API and restart on file changes |
-| `bun run start`                          | Start the API                             |
-| `bun run db:generate`                    | Generate Drizzle migrations               |
-| `bun run db:migrate`                     | Apply migrations                          |
-| `bun run db:push`                        | Push schema directly (local development)  |
-| `bun run test`                           | Run the test suite                        |
-| `bun run test:unit` / `test:integration` | Run one test layer                        |
-| `bun run lint` / `format` / `typecheck`  | Lint, format, and type-check              |
+| Command                                  | Description                                         |
+| ---------------------------------------- | --------------------------------------------------- |
+| `bun run dev`                            | Start the API and restart on file changes           |
+| `bun run start`                          | Start the API                                       |
+| `bun run dev:worker` / `worker`          | Start the job worker (with / without file watching) |
+| `bun run dev:all`                        | API and worker together                             |
+| `bun run db:generate`                    | Generate Drizzle migrations                         |
+| `bun run db:migrate`                     | Apply migrations                                    |
+| `bun run db:push`                        | Push schema directly (local development)            |
+| `bun run test`                           | Run the test suite                                  |
+| `bun run test:unit` / `test:integration` | Run one test layer                                  |
+| `bun run lint` / `format` / `typecheck`  | Lint, format, and type-check                        |
 
 ## Project layout
 

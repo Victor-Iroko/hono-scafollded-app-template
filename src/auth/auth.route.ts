@@ -13,7 +13,9 @@ export const AuthRoute = Layer.unwrap(
         const web = yield* HttpServerRequest.toWeb(request);
         const headers = new Headers(web.headers);
         headers.delete(CLIENT_IP_HEADER);
-        Option.map(request.remoteAddress, (address) => headers.set(CLIENT_IP_HEADER, address));
+        if (Option.isSome(request.remoteAddress)) {
+          headers.set(CLIENT_IP_HEADER, request.remoteAddress.value);
+        }
 
         const response = yield* Effect.promise(() => auth.handler(new Request(web, { headers })));
         return HttpServerResponse.fromWeb(response);

@@ -2,7 +2,7 @@ import { sql } from "drizzle-orm";
 import { Context, Duration, Effect, Layer } from "effect";
 import { ShutdownSignal } from "../../http/shutdown";
 import { Database } from "../../platform/database";
-import { CacheRedis } from "../../platform/redis";
+import { CacheRedis, JobsRedis } from "../../platform/redis";
 import type { DependencyCheck, DependencyChecks } from "./health.schema";
 
 const PROBE_TIMEOUT = Duration.seconds(2);
@@ -39,13 +39,15 @@ export class HealthService extends Context.Service<
     HealthService,
     Effect.gen(function* () {
       const db = yield* Database;
-      const redis = yield* CacheRedis;
+      const cacheRedis = yield* CacheRedis;
+      const jobsRedis = yield* JobsRedis;
       const shutdown = yield* ShutdownSignal;
 
       const probeAll = Effect.all(
         {
           database: checkDependency("database", db.execute(sql`select 1`)),
-          redis: checkDependency("redis", redis.send("PING")),
+          cacheRedis: checkDependency("cacheRedis", cacheRedis.send("PING")),
+          jobsRedis: checkDependency("jobsRedis", jobsRedis.send("PING")),
         },
         { concurrency: "unbounded" },
       );
@@ -60,5 +62,5 @@ export class HealthService extends Context.Service<
 
       return HealthService.of({ readiness });
     }),
-  ).pipe(Layer.provide([Database.layer, CacheRedis.layer]));
+  ).pipe(Layer.provide([Database.layer, CacheRedis.layer, JobsRedis.layer]));
 }
