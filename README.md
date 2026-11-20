@@ -1,5 +1,7 @@
 # Hono Scaffolded App Template
 
+> Being rewritten on Effect v4. See [docs/effect-v4-migration-plan.md](docs/effect-v4-migration-plan.md) for the plan and progress; sections below describe the new code only where it exists.
+
 A production-minded API starter on [Bun](https://bun.sh) and [Hono](https://hono.dev), with the boilerplate most services need already wired up:
 
 - Postgres + Drizzle ORM, Better Auth (email/password, Google, verification)
@@ -70,39 +72,28 @@ Configure the organization and instance in `fern/fern.config.json` and `fern/doc
 
 ## Scripts
 
-| Command                                  | Description                              |
-| ---------------------------------------- | ---------------------------------------- |
-| `bun run dev`                            | Start the API with hot reload            |
-| `bun run dev:all`                        | Start API and worker together            |
-| `bun run worker`                         | Start the job worker                     |
-| `bun run db:generate`                    | Generate Drizzle migrations              |
-| `bun run db:migrate`                     | Apply migrations                         |
-| `bun run db:push`                        | Push schema directly (local development) |
-| `bun run db:seed`                        | Seed the database                        |
-| `bun run openapi:generate`               | Regenerate `openapi.json`                |
-| `bun run auth:generate`                  | Regenerate the Better Auth schema        |
-| `bun run test`                           | Run the test suite                       |
-| `bun run test:unit` / `test:integration` | Run one test layer                       |
-| `bun run test:coverage`                  | Run tests with coverage                  |
-| `bun run lint` / `format` / `typecheck`  | Lint, format, and type-check             |
+| Command                                  | Description                               |
+| ---------------------------------------- | ----------------------------------------- |
+| `bun run dev`                            | Start the API and restart on file changes |
+| `bun run start`                          | Start the API                             |
+| `bun run db:generate`                    | Generate Drizzle migrations               |
+| `bun run db:migrate`                     | Apply migrations                          |
+| `bun run db:push`                        | Push schema directly (local development)  |
+| `bun run test`                           | Run the test suite                        |
+| `bun run test:unit` / `test:integration` | Run one test layer                        |
+| `bun run lint` / `format` / `typecheck`  | Lint, format, and type-check              |
 
 ## Project layout
 
 ```
 src/
-  api/              HTTP modules (router, schema, service)
-  auth/             Better Auth configuration and middleware
-  core/             Env validation, DB, Redis, queues, logging, metrics, S3
-  db/               Drizzle schema and relations
-  integrations/     Email templates and Paystack
-  jobs/             Queue definitions, handlers, dead-letter handling
-  middleware/       Rate limiting
-  app.ts            Hono app assembly
-  index.ts          API entry point
-  worker.ts         Worker entry point
-fern/               Fern docs configuration
-scripts/            OpenAPI, seeding, and database scripts
-observability/      OpenTelemetry collector and Prometheus configs
+  api/<module>/     <module>.api.ts (endpoints), .handlers.ts, .schema.ts, .service.ts
+  http/             The HttpApi contract and the Bun HTTP server
+  platform/         Infrastructure services (observability, and later database, Redis, storage, mail)
+  config.ts         Every environment variable, grouped by domain
+  main.ts           API entry point
+tests/              Unit and integration tests (bun test)
+observability/      OpenTelemetry collector config
 ```
 
 ## Before deploying
