@@ -9,7 +9,7 @@ import { Api } from "../../../src/http/api";
 const healthy: Readiness = {
   ok: true,
   draining: false,
-  checks: { database: { ok: true, latencyMs: 1 } },
+  checks: { database: { ok: true, latencyMs: 1 }, redis: { ok: true, latencyMs: 1 } },
 };
 
 const callHealthApi = <A, E>(

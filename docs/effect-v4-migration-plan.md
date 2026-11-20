@@ -217,23 +217,13 @@ Errors are RFC 9457 problems (`application/problem+json`), using Effect's built-
 
 ### 5.3 Rate limiting: token bucket
 
-```ts
-rateLimiter.consume({
-  algorithm: "token-bucket",
-  key: `global:${clientKey}`,
-  limit: config.capacity, // RATE_LIMIT_CAPACITY, bucket size (burst)
-  window: config.refillWindow, // RATE_LIMIT_REFILL_WINDOW, time to refill the whole bucket
-  tokens: endpointCost, // default 1; expensive endpoints can cost more
-  onExceeded: "fail",
-});
-```
-
-- **Store:** `RateLimiter.layerStoreRedis`, provided with the cache Redis.
-- **Breaker:** the store call runs inside `CircuitBreaker` (rate trip policy). A classifier counts only timeouts and connection errors as failures, which resolves the TODO.md item.
-- **Store down:** a 100 ms timeout. Fail-open or fail-closed is set per limiter, and state changes are logged once.
-- **Response headers:** `X-RateLimit-Limit`, `X-RateLimit-Remaining` and `Retry-After`, computed from the `ConsumeResult`.
-- **Client key:** taken from `X-Forwarded-For` only when `TRUST_PROXY_HEADERS` is on. Unknown addresses get their own bucket instead of sharing the global one.
-- **Per-route limits:** the middleware reads an endpoint annotation (`RateLimit.cost`, `RateLimit.policy`), so a route can have a stricter bucket without new middleware.
+- **Service:** `RateLimits` (`src/platform/rate-limits.ts`) wraps Effect's `RateLimiter` with `algorithm: "token-bucket"` on the cache Redis. It returns a decision (`Allowed`, `Limited`, `Unavailable`) and never fails, so the HTTP middleware, Better Auth and job throttling can share it.
+- **Breaker:** the store call has a 100 ms timeout inside a `CircuitBreaker` (rate policy, in-memory per process). The classifier counts only store errors and timeouts, never a 429. Circuit transitions are logged once.
+- **Middleware:** `RateLimit` (`src/http/rate-limit.ts`) is an `HttpApiMiddleware` applied in `api.ts` to every feature group (added before `.middleware(RateLimit)`); health probes are added after it and are exempt.
+- **Headers:** `X-RateLimit-Limit`, `X-RateLimit-Remaining` from the bucket itself, and `Retry-After` on 429.
+- **Per-endpoint policy:** `.annotate(RateLimitPolicy, { bucket, capacity, refillWindow, cost })`.
+- **Client key:** the remote address. `TRUSTED_PROXIES` (CIDRs) enables Effect's `xForwardedHeaders`, which only believes proxies in those networks.
+- **Store down:** `RATE_LIMIT_FAIL_MODE=open` (default) serves the request; `closed` answers 503.
 
 ## 6. Services
 
@@ -246,9 +236,10 @@ rateLimiter.consume({
 
 ### 6.2 Redis
 
-- **Two instances:** `CacheRedis` (`allkeys-lru`) and `JobsRedis` (`noeviction` + AOF), each its own `BunRedis.layerConfig`.
-- **Why two:** both expose Effect's `Redis` service, so each consumer gets its instance provided locally. The rate limiter gets the cache instance and the queue store gets the jobs instance, and the two can never be swapped by accident.
-- **Fallback:** if `BunRedis` lacks something we need (Lua `eval` for the Better Auth limiter, command timeouts), we write a one-file `Redis` implementation over `ioredis`.
+- **Two instances:** `CacheRedis` (fail fast while disconnected, no offline queue) and `JobsRedis` (offline queue on), each a `BunRedis` client on Bun's native Redis.
+- **Why two:** both expose Effect's `Redis` service, so each consumer gets its instance provided locally through `CacheRedis.asRedis` / `JobsRedis.asRedis`. The rate limiter gets the cache instance and the queue store will get the jobs instance.
+- **Connecting:** the client connects while the layer builds. If Redis is down at boot the process still starts and retries in the background (exponential, capped at 5 s); verified that readiness recovers within seconds both after a cold start without Redis and after a mid-run outage.
+- **Readiness:** `/readyz` pings the cache Redis.
 
 ### 6.3 Observability
 
@@ -362,7 +353,7 @@ Each phase ends with `typecheck`, `lint` and its own tests green.
 1. ✅ **Skeleton:** dependencies, tsconfig, `config.ts`, `observability.ts`, and `main.ts` serving `/healthz` on `BunHttpServer`. Delete the old `src/`.
 2. ✅ **Database:** drizzle rc, the `Database` service, migrate entry, drizzle-kit config, the SQLSTATE mapping with tests, and a transaction-composition check.
 3. ✅ **HTTP contract:** `HttpApi`, error schemas, middleware pipeline, health and readiness, docs routes.
-4. **Redis + rate limit:** both Redis layers, token-bucket middleware, circuit breaker.
+4. ✅ **Redis + rate limit:** both Redis layers, token-bucket middleware, circuit breaker.
 5. **Auth:** `BetterAuth` service, auth route, `Authenticated` middleware, the OpenAPI merge script.
 6. **Jobs + email:** `PersistedQueue` definitions, worker, `Mailer`, `html` templates, `EmailService`.
 7. **Integrations:** `Storage`, `PaystackClient`.

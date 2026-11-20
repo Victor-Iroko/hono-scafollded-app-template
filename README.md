@@ -89,7 +89,8 @@ Configure the organization and instance in `fern/fern.config.json` and `fern/doc
 src/
   api/<module>/     <module>.api.ts (endpoints), .handlers.ts, .schema.ts, .service.ts
   http/             The HttpApi contract and the Bun HTTP server
-  platform/         Infrastructure services: observability, database (Drizzle on @effect/sql-pg)
+  platform/         Infrastructure services: observability, database (Drizzle on @effect/sql-pg),
+                    Redis (cache + jobs), token-bucket rate limits
   db/               Drizzle schema, relations, and migrations
   config.ts         Every environment variable, grouped by domain
   main.ts           API entry point
@@ -113,6 +114,7 @@ Request validation failures are `400` problems with an `errors` array (`{ path, 
 - Replace every development credential and secret in `.env`.
 - Keep `DOCS_ENABLED` unset in production unless the API reference should be public.
 - Set `TRUSTED_ORIGINS` to the browser origins that call the API.
+- Set `TRUSTED_PROXIES` to your load balancer's CIDRs so rate limits key on the real client IP.
 - Point the load balancer's readiness check at `/readyz` and liveness at `/healthz`.
 - Use real S3 and SMTP credentials, and run the API and worker as separate processes.
 - Apply migrations with `bun run db:migrate` instead of `db:push`.

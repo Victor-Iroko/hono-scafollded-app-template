@@ -19,6 +19,7 @@ describe("config", () => {
       host: "0.0.0.0",
       port: 3000,
       trustedOrigins: [],
+      trustedProxies: [],
       maxBodyBytes: 1_048_576,
       requestTimeoutMs: 30_000,
       shutdownGraceMs: 5_000,

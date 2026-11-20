@@ -7,12 +7,18 @@ import { HttpConfig } from "../config";
 import { Api } from "./api";
 import { DocsLive } from "./docs";
 import { HttpMiddlewareLive } from "./middleware";
+import { RateLimit } from "./rate-limit";
 import { ShutdownSignal } from "./shutdown";
 
 const ApiLive = HttpApiBuilder.layer(Api).pipe(
   Layer.provide([HealthHandlers]),
   // API middleware must be visible while the routes are built.
-  Layer.provideMerge(HttpApiMiddleware.layerProblemDetails({ includeDetails: true })),
+  Layer.provideMerge(
+    Layer.mergeAll(
+      HttpApiMiddleware.layerProblemDetails({ includeDetails: true }),
+      RateLimit.layer,
+    ),
+  ),
 );
 
 /** Every route plus the global middleware, without a server (tests use this). */

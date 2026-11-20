@@ -1,13 +1,16 @@
 // The global request pipeline, outermost first:
 //
-//   request id → access log → security headers → render failures → body limit → timeout → route
+//   client address → request id → access log → security headers → render failures
+//   → body limit → timeout → route
 //
 // Typed endpoint errors are already problem responses when they reach this
 // pipeline. What arrives as a failure is an unknown route, a request parse
 // error, or a defect; `renderFailures` turns those into problem responses too.
 import { ByteSize, Cause, Duration, Effect, ErrorReporter, Layer, Option } from "effect";
+import { IpNetwork } from "effect/net";
 import {
   HttpIncomingMessage,
+  HttpMiddleware,
   HttpRouter,
   HttpServerRequest,
   HttpServerRespondable,
@@ -130,11 +133,22 @@ const withTimeout =
         HttpServerRespondable.toResponse(new ServiceUnavailable({ detail: "Request timed out" })),
     });
 
+// Only proxies in TRUSTED_PROXIES may rewrite the client address from X-Forwarded-For.
+const withClientAddress = (trustedProxies: ReadonlyArray<IpNetwork.IpNetwork>) =>
+  trustedProxies.length === 0
+    ? <E, R>(app: HttpApp<E, R>) => app
+    : HttpMiddleware.xForwardedHeaders({ trustedProxies });
+
 export const HttpMiddlewareLive = Layer.unwrap(
   Effect.gen(function* () {
     const app = yield* AppConfig;
     const http = yield* HttpConfig;
     const isProduction = app.env === "production";
+    const trustedProxies = yield* Effect.forEach(http.trustedProxies, (cidr) =>
+      Effect.fromResult(IpNetwork.fromString(cidr)).pipe(
+        Effect.mapError((cause) => new Error(`TRUSTED_PROXIES: invalid CIDR "${cidr}"`, { cause })),
+      ),
+    );
 
     const pipeline = HttpRouter.middleware(
       <E, R>(route: HttpApp<E, R>) =>
@@ -145,6 +159,7 @@ export const HttpMiddlewareLive = Layer.unwrap(
           withSecurityHeaders({ strictTransportSecurity: isProduction }),
           logAccess,
           withRequestId,
+          withClientAddress(trustedProxies),
         ),
       { global: true },
     );

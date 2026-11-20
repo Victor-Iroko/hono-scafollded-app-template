@@ -25,6 +25,11 @@ export const HttpConfig = Config.all({
   trustedOrigins: Config.Array(Schema.String, "TRUSTED_ORIGINS", { separator: "," }).pipe(
     Config.withDefault([]),
   ),
+  // CIDRs of reverse proxies whose X-Forwarded-For is believed, e.g. 10.0.0.0/8.
+  // Empty means the TCP peer is the client address.
+  trustedProxies: Config.Array(Schema.String, "TRUSTED_PROXIES", { separator: "," }).pipe(
+    Config.withDefault([]),
+  ),
   maxBodyBytes: intInRange(
     "HTTP_MAX_BODY_BYTES",
     { minimum: 1_024, maximum: 104_857_600 },
@@ -61,5 +66,27 @@ export const DatabaseConfig = Config.all({
     "DB_STATEMENT_TIMEOUT_MS",
     { minimum: 0, maximum: 3_600_000 },
     30_000,
+  ),
+});
+
+export const RedisConfig = Config.all({
+  // Cache and rate-limit store: evictable (allkeys-lru), no persistence needed.
+  cacheUrl: Config.Redacted("REDIS_URL"),
+  // Job queue store: must run with noeviction and persistence.
+  jobsUrl: Config.Redacted("REDIS_JOBS_URL"),
+  connectTimeoutMs: intInRange(
+    "REDIS_CONNECT_TIMEOUT_MS",
+    { minimum: 100, maximum: 60_000 },
+    5_000,
+  ),
+});
+
+export const RateLimitConfig = Config.all({
+  // Token bucket: up to `capacity` requests in a burst, refilled evenly over `refillWindowS`.
+  capacity: intInRange("RATE_LIMIT_CAPACITY", { minimum: 1, maximum: 1_000_000 }, 100),
+  refillWindowS: intInRange("RATE_LIMIT_REFILL_WINDOW_S", { minimum: 1, maximum: 86_400 }, 60),
+  // What to do when Redis is unreachable: "open" serves the request, "closed" answers 503.
+  failMode: Config.Literals(["open", "closed"], "RATE_LIMIT_FAIL_MODE").pipe(
+    Config.withDefault("open"),
   ),
 });
