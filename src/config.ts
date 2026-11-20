@@ -121,3 +121,30 @@ export const EmailConfig = Config.all({
   ratePerSecond: intInRange("EMAIL_RATE_PER_SECOND", { minimum: 1, maximum: 10_000 }, 10),
   workerConcurrency: intInRange("EMAIL_WORKER_CONCURRENCY", { minimum: 1, maximum: 100 }, 10),
 });
+
+export const StorageConfig = Config.all({
+  bucket: Config.String("S3_BUCKET"),
+  region: Config.String("S3_REGION").pipe(Config.withDefault("us-east-1")),
+  // Omit for AWS S3; set for RustFS, MinIO, R2, ...
+  endpoint: Config.option(Config.URL("S3_ENDPOINT")),
+  // Host presigned URLs are signed for, when browsers reach storage on a different host.
+  publicEndpoint: Config.option(Config.URL("S3_PUBLIC_ENDPOINT")),
+  // Set both or neither; neither uses the AWS default credential chain.
+  accessKeyId: Config.option(Config.String("S3_ACCESS_KEY_ID")),
+  secretAccessKey: Config.option(Config.Redacted("S3_SECRET_ACCESS_KEY")),
+  forcePathStyle: Config.Boolean("S3_FORCE_PATH_STYLE").pipe(Config.withDefault(true)),
+  presignExpiresS: intInRange("S3_PRESIGN_EXPIRES_S", { minimum: 1, maximum: 604_800 }, 3_600),
+  requestTimeoutMs: intInRange(
+    "S3_REQUEST_TIMEOUT_MS",
+    { minimum: 1_000, maximum: 300_000 },
+    15_000,
+  ),
+  // Local stacks only: create the bucket at startup. Production buckets belong to IaC.
+  autoCreateBucket: Config.Boolean("S3_AUTO_CREATE_BUCKET").pipe(Config.withDefault(false)),
+});
+
+export const PaystackConfig = Config.all({
+  secretKey: Config.Redacted("PAYSTACK_SECRET_KEY"),
+  baseUrl: Config.String("PAYSTACK_BASE_URL").pipe(Config.withDefault("https://api.paystack.co")),
+  requestTimeoutMs: intInRange("PAYSTACK_TIMEOUT_MS", { minimum: 1_000, maximum: 120_000 }, 15_000),
+});

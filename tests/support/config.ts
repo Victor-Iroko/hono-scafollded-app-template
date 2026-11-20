@@ -22,6 +22,11 @@ export const testConfig = (env: Record<string, string> = {}) =>
         BETTER_AUTH_URL: "http://localhost:3000",
         SMTP_URL: TEST_SMTP_URL,
         EMAIL_FROM: "Test <no-reply@example.test>",
+        // S3Mock from docker-compose.test.yml; it ignores credentials.
+        S3_BUCKET: "app-bucket-test",
+        S3_ENDPOINT: "http://localhost:9090",
+        S3_ACCESS_KEY_ID: "test",
+        S3_SECRET_ACCESS_KEY: "test",
         ...env,
       },
     }),

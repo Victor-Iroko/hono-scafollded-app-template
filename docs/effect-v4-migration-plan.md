@@ -280,16 +280,16 @@ All telemetry leaves the process as OpenTelemetry, and Sentry also gets every er
 
 ### 6.6 Storage (S3)
 
-- **API:** the `Storage` service exposes `put`, `remove`, `presignUpload`, `presignDownload`, `ensureBucket` and `check`.
-- **Wrapping:** each method wraps AWS SDK calls in `Effect.tryPromise` with a timeout, a span, and a `StorageError`. The separate public-endpoint presign client stays.
-- **Bucket creation:** `ensureBucket` runs at layer build when `S3_AUTO_CREATE_BUCKET` is set.
+- **API:** `Storage` (`src/platform/storage.ts`) exposes `put`, `remove`, `presignUpload`, `presignDownload` and `check`. Each call has a timeout (`S3_REQUEST_TIMEOUT_MS`, aborting the SDK request), a span, and fails with `StorageError`. A second client signs URLs for `S3_PUBLIC_ENDPOINT` when set.
+- **Bucket bootstrap:** with `S3_AUTO_CREATE_BUCKET` the layer creates a missing bucket at startup; failure is logged and `/readyz` reports it instead of stopping the boot.
+- **Readiness:** `/readyz` includes `storage` (HeadBucket). Verified against S3Mock (put, presigned GET, presigned PUT, delete) and on a real server with storage unreachable (boots, 503).
 
 ### 6.7 Paystack
 
-- **Client:** the `PaystackClient` service runs on `HttpClient` with the base URL and bearer token applied once.
-- **Responses:** every response is decoded with Schema into `PaystackError` variants: `Network`, `Http`, `Decode`, `Api`.
-- **Retries:** reads retry transient failures with jittered backoff. Money-moving calls never retry automatically and require a caller-supplied `reference`, the idempotency key.
-- **Webhooks:** verification stays a pure function (`timingSafeEqual` on HMAC-SHA512), plus a ready-to-mount webhook endpoint that reads the raw body.
+- **Client:** `PaystackClient` (`src/integrations/paystack/paystack.client.ts`) on `HttpClient`: base URL and bearer key applied once, a timeout per call, the `{ status, message, data }` envelope unwrapped and `data` decoded with a schema. Helpers cover transactions, authorization charges, refunds, banks, account resolution, recipients and transfers; `request` covers any other endpoint.
+- **Errors:** `PaystackError` with `reason` `Network` (outcome unknown, verify by reference), `Api` (Paystack refused, with its message and status) or `Decode`.
+- **Retries:** GET requests retry network failures (3 times, jittered backoff). Anything that can move money never retries automatically and requires a caller `reference`.
+- **Webhooks:** `verifyWebhookSignature` (constant-time HMAC-SHA512 over the raw body) and `paystackWebhookRoute(path, onEvent)`, which reads the raw text, answers 401/400 problems for bad signatures or payloads, and calls the handler with a decoded event. It is not mounted by default.
 
 ### 6.8 Email templates without JSX
 
@@ -346,7 +346,7 @@ Each phase ends with `typecheck`, `lint` and its own tests green.
 4. ✅ **Redis + rate limit:** both Redis layers, token-bucket middleware, circuit breaker.
 5. ✅ **Auth:** `BetterAuth` service, auth route, `Authenticated` middleware, the OpenAPI merge script.
 6. ✅ **Jobs + email:** `PersistedQueue` definitions, worker, `Mailer`, `html` templates, `EmailService`.
-7. **Integrations:** `Storage`, `PaystackClient`.
+7. ✅ **Integrations:** `Storage`, `PaystackClient`.
 8. **Sentry + OTLP:** collector fan-out config, a real Sentry event and trace checked from Bun.
 9. **Tests, CI, Docker, docs:** README, AGENTS.md, the repo skills (backend rules, serverless conversion, customize template), the production guide scorecard, `.env.example`.
 

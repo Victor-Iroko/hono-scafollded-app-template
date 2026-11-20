@@ -3,6 +3,7 @@ import { Context, Duration, Effect, Layer } from "effect";
 import { ShutdownSignal } from "../../http/shutdown";
 import { Database } from "../../platform/database";
 import { CacheRedis, JobsRedis } from "../../platform/redis";
+import { Storage } from "../../platform/storage";
 import type { DependencyCheck, DependencyChecks } from "./health.schema";
 
 const PROBE_TIMEOUT = Duration.seconds(2);
@@ -41,6 +42,7 @@ export class HealthService extends Context.Service<
       const db = yield* Database;
       const cacheRedis = yield* CacheRedis;
       const jobsRedis = yield* JobsRedis;
+      const storage = yield* Storage;
       const shutdown = yield* ShutdownSignal;
 
       const probeAll = Effect.all(
@@ -48,6 +50,7 @@ export class HealthService extends Context.Service<
           database: checkDependency("database", db.execute(sql`select 1`)),
           cacheRedis: checkDependency("cacheRedis", cacheRedis.send("PING")),
           jobsRedis: checkDependency("jobsRedis", jobsRedis.send("PING")),
+          storage: checkDependency("storage", storage.check),
         },
         { concurrency: "unbounded" },
       );
@@ -62,5 +65,5 @@ export class HealthService extends Context.Service<
 
       return HealthService.of({ readiness });
     }),
-  ).pipe(Layer.provide([Database.layer, CacheRedis.layer, JobsRedis.layer]));
+  ).pipe(Layer.provide([Database.layer, CacheRedis.layer, JobsRedis.layer, Storage.layer]));
 }

@@ -24,6 +24,7 @@ const healthy: Readiness = {
     database: { ok: true, latencyMs: 1 },
     cacheRedis: { ok: true, latencyMs: 1 },
     jobsRedis: { ok: true, latencyMs: 1 },
+    storage: { ok: true, latencyMs: 1 },
   },
 };
 

@@ -11,6 +11,7 @@ export const DependencyChecks = Schema.Struct({
   database: DependencyCheck,
   cacheRedis: DependencyCheck,
   jobsRedis: DependencyCheck,
+  storage: DependencyCheck,
 });
 
 export const ReadyResponse = Schema.Struct({

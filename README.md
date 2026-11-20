@@ -44,6 +44,8 @@ API docs are served when `DOCS_ENABLED=true` in `.env`. Health endpoints are alw
 - Background work runs on durable queues in the jobs Redis (`src/jobs`). Delivery is at least once, so handlers must be idempotent. To add a queue: declare it like `src/jobs/email.queue.ts`, write its handler, and add a `consume(...)` line to `src/jobs/worker.ts`.
 - Send email with `EmailService.enqueue({ template, to, data })`; templates live in `src/integrations/email/templates.ts`. Failed sends retry with backoff; permanent rejections are logged and reported instead.
 
+Store files with `Storage` (`src/platform/storage.ts`): clients upload and download through presigned URLs, so bodies never pass through the API. Take payments with `PaystackClient` (`src/integrations/paystack`); calls that move money require a `reference` and never retry automatically, and `paystackWebhookRoute` verifies Paystack's signature before your handler runs.
+
 Jobs that fail every attempt stay in Redis under `jobs:<queue>` as the dead-letter record, are logged at error level and reported to Sentry. Inspect them with `redis-cli -p 6381 -a redis`.
 
 ## Fern documentation
@@ -81,7 +83,9 @@ src/
   auth/             Better Auth service, /api/auth/* route, Authenticated middleware
   http/             The HttpApi contract and the Bun HTTP server
   platform/         Infrastructure services: observability, database (Drizzle on @effect/sql-pg),
-                    Redis (cache + jobs), token-bucket rate limits
+                    Redis (cache + jobs), token-bucket rate limits, S3 storage, SMTP mailer
+  integrations/     Email templates + EmailService, Paystack client and webhook route
+  jobs/             Durable queues, job handlers, and the worker's consumers
   db/               Drizzle schema, relations, and migrations
   config.ts         Every environment variable, grouped by domain
   main.ts           API entry point
