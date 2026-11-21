@@ -1,20 +1,21 @@
 // Better Auth, built inside an Effect layer.
 //
-// Better Auth's Drizzle adapter is Promise-based, so it runs on its own small
-// `pg` pool with drizzle's node-postgres driver (same schema, same rc). Its
-// callbacks (rate-limit storage, emails) run Effects through the context the
-// layer captured, so they share the app's services, logs and traces.
+// Better Auth's Drizzle adapter is Promise-based, so it gets drizzle's
+// pg-proxy driver whose queries run on the app's @effect/sql-pg client: same
+// pool, statement timeout, SQL spans and error mapping as every other query.
+// Its callbacks (queries, rate-limit storage, emails, logs) run Effects through
+// the context the layer captured.
 import { drizzleAdapter } from "@better-auth/drizzle-adapter";
 import type { BetterAuthRateLimitStorage } from "better-auth";
 import { betterAuth } from "better-auth/minimal";
 import { openAPI } from "better-auth/plugins";
-import { drizzle } from "drizzle-orm/node-postgres";
-import type { NodePgDatabase } from "drizzle-orm/node-postgres";
+import { effectPgCodecs } from "drizzle-orm/effect-postgres/codecs";
+import { drizzle, type PgRemoteDatabase, type RemoteCallback } from "drizzle-orm/pg-proxy";
 import { Context, Duration, Effect, Layer, Option, Redacted } from "effect";
-import { Pool } from "pg";
-import { AppConfig, AuthConfig, DatabaseConfig, HttpConfig } from "../config";
+import { AuthConfig, HttpConfig } from "../config";
 import * as authSchema from "../db/schema/auth";
 import { EmailService, type EnqueueEmail } from "../integrations/email/email.service";
+import { Database } from "../platform/database";
 import { RateLimits } from "../platform/rate-limits";
 
 export const AUTH_BASE_PATH = "/api/auth";
@@ -47,7 +48,15 @@ export interface AuthOptions {
 const TOKEN_TTL_S = 60 * 60;
 
 /** Pure Better Auth factory; the layer below and the OpenAPI script both use it. */
-export function createAuth(db: NodePgDatabase<any>, options: AuthOptions) {
+/**
+ * A Promise-based Drizzle for Better Auth whose queries run through `run`.
+ * `all` queries return rows as arrays, `execute` as objects, which is what the
+ * pg-proxy driver expects; the Effect codecs match @effect/sql-pg's values.
+ */
+export const makeAuthDatabase = (query: RemoteCallback) =>
+  drizzle(query, { codecs: effectPgCodecs });
+
+export function createAuth(db: PgRemoteDatabase, options: AuthOptions) {
   const baseURL = options.baseUrl.replace(/\/+$/, "");
   const trustedOrigins = [...new Set([new URL(baseURL).origin, ...options.trustedOrigins])];
 
@@ -159,10 +168,9 @@ export class BetterAuth extends Context.Service<BetterAuth, AppAuth>()("app/Bett
   static readonly layer = Layer.effect(
     BetterAuth,
     Effect.gen(function* () {
-      const app = yield* AppConfig;
       const auth = yield* AuthConfig;
-      const database = yield* DatabaseConfig;
       const http = yield* HttpConfig;
+      const { $client: sql } = yield* Database;
       const limits = yield* RateLimits;
       const emails = yield* EmailService;
       const context = yield* Effect.context<never>();
@@ -182,22 +190,19 @@ export class BetterAuth extends Context.Service<BetterAuth, AppAuth>()("app/Bett
         }),
       );
 
-      const pool = yield* Effect.acquireRelease(
-        Effect.sync(
-          () =>
-            new Pool({
-              connectionString: Redacted.value(database.url),
-              max: auth.poolMax,
-              idleTimeoutMillis: database.idleTimeoutMs,
-              connectionTimeoutMillis: database.connectTimeoutMs,
-              statement_timeout: database.statementTimeoutMs,
-              application_name: `${app.serviceName}-auth`,
-            }),
+      const authDatabase = makeAuthDatabase((text, params, method) =>
+        run(
+          (method === "all"
+            ? sql.unsafe(text, params).values
+            : sql.unsafe(text, params).withoutTransform
+          ).pipe(
+            Effect.map((rows) => ({ rows: [...rows] })),
+            Effect.withSpan("BetterAuth.query"),
+          ),
         ),
-        (pool) => Effect.promise(() => pool.end()),
       );
 
-      return createAuth(drizzle({ client: pool }), {
+      return createAuth(authDatabase, {
         baseUrl: auth.baseUrl.toString(),
         secret: Redacted.value(auth.secret),
         trustedOrigins: http.trustedOrigins,
@@ -221,5 +226,5 @@ export class BetterAuth extends Context.Service<BetterAuth, AppAuth>()("app/Bett
           ),
       });
     }),
-  ).pipe(Layer.provide([RateLimits.layer, EmailService.layer]));
+  ).pipe(Layer.provide([Database.layer, RateLimits.layer, EmailService.layer]));
 }

@@ -104,8 +104,6 @@ export const AuthConfig = Config.all({
   // Google sign-in: set both or neither.
   googleClientId: Config.option(Config.String("GOOGLE_CLIENT_ID")),
   googleClientSecret: Config.option(Config.Redacted("GOOGLE_CLIENT_SECRET")),
-  // Better Auth's adapter is Promise-based, so it keeps its own small pool.
-  poolMax: intInRange("AUTH_DB_POOL_MAX", { minimum: 1, maximum: 50 }, 5),
 });
 
 export const EmailConfig = Config.all({

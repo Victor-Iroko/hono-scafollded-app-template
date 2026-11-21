@@ -260,7 +260,7 @@ All telemetry leaves the process as OpenTelemetry; Sentry also gets every unexpe
 
 ### 6.4 Auth (Better Auth)
 
-- **`BetterAuth` service** (`src/auth/auth.ts`): `createAuth` is a pure factory (also used by `scripts/openapi.ts` with `drizzle.mock()`); the layer builds it on a small dedicated `pg.Pool` with `drizzle-orm/node-postgres` (the adapter is Promise-based), closed by a finalizer.
+- **`BetterAuth` service** (`src/auth/auth.ts`): `createAuth` is a pure factory (also used by `scripts/openapi.ts`). The adapter is Promise-based, so it gets drizzle's `pg-proxy` driver whose queries run on the app's `@effect/sql-pg` client: one pool, the same statement timeout, SQL spans (under `BetterAuth.query`) and metrics. The `pg` package is not used. `pg-proxy` has no transactions; Better Auth's adapter does not use them by default (`transaction: false`).
 - **Callbacks** run Effects through the context the layer captured: rate-limit storage uses the shared token-bucket `RateLimits` (fails open), Better Auth's log lines go to the Effect logger (message only), and auth emails go to `sendEmail`, which phase 6 points at the email queue.
 - **Client IP:** the auth route strips any incoming `x-client-ip` and sets it from the address the HTTP pipeline resolved (`TRUSTED_PROXIES` aware); Better Auth reads only that header.
 - **Route:** `/api/auth/*` bridges to `auth.handler` with `HttpServerRequest.toWeb` / `HttpServerResponse.fromWeb`.

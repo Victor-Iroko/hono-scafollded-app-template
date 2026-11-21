@@ -10,7 +10,10 @@ import { Context, Duration, Effect, Layer } from "effect";
 import { AppConfig, DatabaseConfig } from "../config";
 import { relations } from "../db/relations";
 
-export type DatabaseClient = PgDrizzle.EffectPgDatabase<typeof relations>;
+export type DatabaseClient = PgDrizzle.EffectPgDatabase<typeof relations> & {
+  /** The underlying @effect/sql-pg client, for code that needs raw SQL on the same pool. */
+  readonly $client: PgClient.PgClient;
+};
 
 const PgClientLive = Layer.unwrap(
   Effect.gen(function* () {
