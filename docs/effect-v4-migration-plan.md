@@ -1,6 +1,6 @@
 # Effect v4 rewrite plan
 
-A full rewrite of the template on Effect v4. Nothing from the current `src/` is kept as-is.
+Status: complete. All nine phases are implemented; the sections below record the design as built.
 Versions were checked against the npm registry on 2026-11-20.
 
 ## 1. Decisions
@@ -349,7 +349,7 @@ Each phase ends with `typecheck`, `lint` and its own tests green.
 6. ✅ **Jobs + email:** `PersistedQueue` definitions, worker, `Mailer`, `html` templates, `EmailService`.
 7. ✅ **Integrations:** `Storage`, `PaystackClient`.
 8. ✅ **Sentry + OTLP:** collector fan-out config, a real Sentry event and trace checked from Bun.
-9. **Tests, CI, Docker, docs:** README, AGENTS.md, the repo skills (backend rules, serverless conversion, customize template), the production guide scorecard, `.env.example`.
+9. ✅ **Tests, CI, Docker, docs:** README, AGENTS.md, the repo skills (backend rules, serverless conversion, customize template), the production guide scorecard, `.env.example`.
 
 ## 9. Risks
 

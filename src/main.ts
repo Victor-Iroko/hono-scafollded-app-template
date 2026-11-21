@@ -1,10 +1,9 @@
-// API process entry point. SIGINT/SIGTERM interrupt the program, and every
-// layer's finalizer runs in reverse build order.
-import { BunRuntime } from "@effect/platform-bun";
+// API process entry point. SIGTERM flips /readyz to 503, waits
+// HTTP_SHUTDOWN_GRACE_MS, drains in-flight requests, closes every resource in
+// reverse build order, and exits 0.
 import { Layer } from "effect";
 import { HttpServerLive } from "./http/server";
 import { ObservabilityLive } from "./platform/observability";
+import { runLongLived } from "./platform/run-main";
 
-const MainLive = HttpServerLive.pipe(Layer.provide(ObservabilityLive));
-
-BunRuntime.runMain(Layer.launch(MainLive));
+runLongLived(Layer.launch(HttpServerLive.pipe(Layer.provide(ObservabilityLive))));

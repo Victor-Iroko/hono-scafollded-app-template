@@ -11,17 +11,17 @@ deviate, flag it in your summary instead of choosing silently.
 
 ## How the rules map to this repo
 
-| Area | Where it lives |
-| --- | --- |
-| Queries | Drizzle builder in the relevant service; raw SQL only through `sql` templates with bound params |
-| Validation | Zod schemas in `<module>.schema.ts`, applied at the route boundary |
-| Transactions | `db.transaction(...)` from `src/core/db.ts`; pass `DbOrTx` into service helpers so they compose |
-| Errors | `AppError` subclasses and `ERROR_CODES` in `src/core/errors.ts` / `src/core/error-schema.ts` |
-| Jobs | BullMQ queues in `src/core/queue.ts`, job code in `src/jobs/`, and the worker entry point in `src/worker.ts` |
-| Logging | pino through `src/core/logger.ts` |
-| Config | `src/core/env.ts`, which fails fast on missing or invalid values |
-| Migrations | `bun run db:generate` into `src/db/migrations` |
-| Checks | `bun run lint`, `bun run typecheck`, `bun test <path>` |
+| Area         | Where it lives                                                                                                                           |
+| ------------ | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| Queries      | Drizzle builder in the relevant service (`yield* db.select()...`); raw SQL only through `sql` templates with bound params                |
+| Validation   | `effect/Schema` in `<module>.schema.ts`, declared on the endpoint in `<module>.api.ts`                                                   |
+| Transactions | `db.transaction(...)` from `src/platform/database.ts`; it follows the fiber, so service calls inside it join it without a `tx` argument  |
+| Errors       | Problem classes in `src/http/errors.ts` (RFC 9457); database failures are mapped in `src/platform/database.error.ts`                     |
+| Jobs         | Queues in `src/jobs/*.queue.ts` (`PersistedQueue` on the jobs Redis), handlers in `src/jobs/*.job.ts`, consumers in `src/jobs/worker.ts` |
+| Logging      | Effect logger (`Effect.logInfo`, `Effect.annotateLogs`); errors to Sentry through `reportError` in `src/platform/observability.ts`       |
+| Config       | `src/config.ts`, which fails the boot on missing or invalid values                                                                       |
+| Migrations   | `bun run db:generate` into `src/db/migrations`                                                                                           |
+| Checks       | `bun run lint`, `bun run typecheck`, `bun test <path>`                                                                                   |
 
 ## Database & Queries
 
@@ -47,7 +47,7 @@ deviate, flag it in your summary instead of choosing silently.
 - Cap concurrency (worker pools, semaphores). Never spawn unbounded tasks/promises over user-controlled input.
 - Every outbound call (HTTP, DB, cache, queue) must have an explicit timeout.
 - Retries only for idempotent operations, with exponential backoff + jitter and a max attempt count.
-- Move slow or non-essential work (emails, report generation, third-party syncs) to background jobs, not the request path. Here that means enqueueing a BullMQ job, not inlining the work.
+- Move slow or non-essential work (emails, report generation, third-party syncs) to background jobs, not the request path. Here that means offering a job to a queue in `src/jobs`, not inlining the work.
 - Cache only with a clear invalidation strategy and TTL. Don't add caching to hide a slow query; fix the query.
 
 ## Idempotency & Reliability

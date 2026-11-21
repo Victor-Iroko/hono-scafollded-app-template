@@ -1,0 +1,12 @@
+.git
+.claude
+.agents
+.github
+node_modules
+tests
+docs
+fern
+observability
+*.md
+.env
+.env.*

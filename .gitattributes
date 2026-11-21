@@ -1,0 +1,5 @@
+# Keep LF everywhere so oxfmt and CI agree on every platform.
+* text=auto eol=lf
+*.png binary
+*.jpg binary
+*.ico binary

@@ -5,7 +5,7 @@
 
 `database.error.ts`
 
-- field-specific `fields` for `23505`: constraint names cannot be parsed — a composite key like `users_org_id_email_key` reads exactly like a single-column unique on `email` — so a duplicate email currently returns a generic 409 with no `fields` entry. A declarative `Record<constraintName, fieldPath>` consulted in `describeDbError()` gives signup forms the field back without guessing, and any unlisted constraint keeps falling back to the generic message. Needs seed entries as unique constraints land in `src/db/schema`
+- field-specific `fields` for `23505`: constraint names cannot be parsed — a composite key like `users_org_id_email_key` reads exactly like a single-column unique on `email` — so a duplicate email currently returns a generic 409 with no `fields` entry. A declarative `Record<constraintName, fieldPath>` consulted in `classifyDatabaseError()` gives signup forms the field back without guessing, and any unlisted constraint keeps falling back to the generic message. Needs entries as unique constraints land in `src/db/schema`
 
 `email` — delivery tracking (deferred from the first pass)
 

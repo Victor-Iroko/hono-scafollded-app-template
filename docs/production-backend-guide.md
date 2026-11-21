@@ -1,6 +1,6 @@
 # Production Backend Guide
 
-What a production-grade backend needs, how this template scores against it, and the order to build one from scratch with Hono and Bun.
+What a production-grade backend needs, how this template scores against it, and the order to build one from scratch with Bun and Effect v4.
 
 Use the inventory as a review rubric and the build phases as the implementation path. Each phase leaves the app runnable; do not skip ahead to queues or tracing before the error contract and database layer are solid.
 
@@ -33,7 +33,7 @@ Use the inventory as a review rubric and the build phases as the implementation 
 
 ### 1.2 Configuration, environment, and secrets
 
-- One validated schema at boot, fail fast, typed access. See `src/core/env.ts`. No scattered `process.env`.
+- One validated schema at boot, fail fast, typed access. See `src/config.ts`. No scattered `process.env`.
 - Per-environment config: local, test, staging, production. A fully documented `.env.example`.
 - Cross-field validation: both-or-neither provider credentials, URL format checks, minimum secret lengths.
 - Safe production defaults: docs off, metrics private, debug logging off.
@@ -47,12 +47,12 @@ Use the inventory as a review rubric and the build phases as the implementation 
 
 - Router composition by module: `router` / `schema` / `service`, plus `error` when a domain needs it.
 - Validation at the boundary for params, query, body, and headers. Reject unknown fields and cap sizes.
-- A consistent error envelope with a stable machine code, human message, field errors, request ID, and path. Correct status codes. See `src/core/errors.ts` and `src/core/error-schema.ts`.
+- A consistent error contract with correct status codes, field errors, and a request ID. This template uses RFC 9457 problems; see `src/http/errors.ts`.
 - 404 and 405 handling, HEAD semantics, and caching headers where relevant.
 - Pagination on every list endpoint, cursor or keyset preferred. Sort and filter allowlists. No unbounded queries.
 - API versioning strategy (`/v1` or media type) and a deprecation policy.
 - Idempotency keys on retryable writes such as payments, orders, and invites.
-- OpenAPI generated from code (`hono-openapi` plus `describeRoute`), docs behind a flag or auth (`DOCS_ENABLED`), Scalar or Fern reference, and `llms.txt` for agents.
+- OpenAPI generated from code (`HttpApi` + `OpenApi.fromApi`), docs behind a flag or auth (`DOCS_ENABLED`), Scalar or Fern reference, and `llms.txt` for agents.
 - Contract tests or a drift check so the spec cannot silently diverge.
 - CORS allowlist (never `*` with credentials), CSRF protection for cookie auth, security headers, body limits, compression, and request timeouts.
 - Large uploads go directly to object storage through presigned URLs, not through the API process.
@@ -93,7 +93,7 @@ Use the inventory as a review rubric and the build phases as the implementation 
 ### 1.6 Caching
 
 - Redis with TLS and a password. Separate instances or logical databases for cache, rate limits, and queues.
-- An eviction policy per use: `allkeys-lru` for cache, `noeviction` plus persistence for BullMQ. The two-Redis split in `docker-compose.yml` is correct.
+- An eviction policy per use: `allkeys-lru` for cache, `noeviction` plus persistence for job queues. The two-Redis split in `docker-compose.yml` is correct.
 - Cache-aside with explicit TTL and an invalidation strategy. Versioned and namespaced keys per environment.
 - Stampede protection through single-flight or a lock, negative caching, and jittered TTLs.
 - Never cache authorization decisions beyond the revocation window.
@@ -102,7 +102,7 @@ Use the inventory as a review rubric and the build phases as the implementation 
 
 ### 1.7 Background jobs and scheduling
 
-- Queue choice follows the runtime: BullMQ plus a worker for long-running Redis, QStash, Cloudflare Queues, or SQS for serverless.
+- Queue choice follows the runtime: a Redis-backed queue plus a worker (here Effect `PersistedQueue`) for long-running deployments; QStash, Cloudflare Queues, or SQS for serverless.
 - A separate worker deployment that scales independently and shuts down gracefully by stopping fetches and finishing in-flight work.
 - Job payloads validated at enqueue and again at execution. A typed job registry, as in `src/jobs/index.ts`.
 - Retries with exponential backoff and jitter, capped attempts, and a distinction between retryable and fatal errors.
@@ -133,7 +133,7 @@ Use the inventory as a review rubric and the build phases as the implementation 
 - OpenTelemetry initialized before the app graph loads. Auto-instrumentation for HTTP, Postgres, Redis, and queues. W3C `traceparent` propagation across async boundaries.
 - Spans for inbound requests, outbound HTTP, database queries, cache calls, and queue publish and consume.
 - RED metrics per route with templated paths and bounded cardinality, USE metrics for resources, database pool stats, queue depth and age, cache hit rate, and business metrics.
-- Prometheus scrape or OTLP push, with `/metrics` private or token-gated.
+- OTLP push (this template), or a Prometheus scrape with `/metrics` private or token-gated.
 - Dashboards before launch: traffic, errors, p50/p95/p99, saturation, dependencies, and queue backlog.
 - SLIs, SLOs, and an error budget. Alerts on burn rate or user-visible symptoms, not CPU. Every alert links to a runbook. On-call rotation assigned.
 - Error tracking (Sentry) with release and commit, environment, source maps, and noise controls.
@@ -210,38 +210,37 @@ Use the inventory as a review rubric and the build phases as the implementation 
 
 ## 2. How this template scores
 
-| Layer              | This template | Main gaps                                                                  |
-| ------------------ | ------------- | -------------------------------------------------------------------------- |
-| Foundations        | Strong        | No `CODEOWNERS`, commit convention, or engines pin                         |
-| Config and secrets | Strong        | Env only; no secret manager integration                                    |
-| HTTP and API       | Partial       | No CORS, security headers, body limit, timeout, versioning, or idempotency |
-| Auth               | Strong core   | No RBAC, MFA, audit log, or API keys                                       |
-| Database           | Strong core   | No backups, PITR, retention, replicas, or restore drill                    |
-| Caching            | Good          | No stampede protection or hit-rate metrics                                 |
-| Background jobs    | Strong        | No outbox, scheduler safety, or DLQ replay UI                              |
-| Integrations       | Good          | No inbound webhook verification or outbound resilience wrapper             |
-| Observability      | Strong core   | No SLOs, dashboards, alerting, or log shipping                             |
-| Reliability        | Partial       | Shutdown does not drain HTTP; no request timeout or budget                 |
-| Security           | Partial       | No scanning, headers, CSRF, SSRF controls, or audit                        |
-| Testing            | Empty         | Only `.gitkeep` files; CI does not run tests                               |
-| CI/CD              | Partial       | Lint, format, and typecheck only; no tests, build, scan, or deploy         |
-| Operations         | Absent        | No runbooks, on-call, SLOs, DR, or retention                               |
+| Layer              | This template | Main gaps                                                                                |
+| ------------------ | ------------- | ---------------------------------------------------------------------------------------- |
+| Foundations        | Strong        | No `CODEOWNERS` or commit convention                                                     |
+| Config and secrets | Strong        | Env only (`src/config.ts`, redacted secrets); no secret manager                          |
+| HTTP and API       | Strong        | CORS, security headers, body limit, timeout, `/v1`; no idempotency-key middleware yet    |
+| Auth               | Strong core   | No RBAC, MFA, audit log, or API keys                                                     |
+| Database           | Strong core   | No backups, PITR, retention, replicas, or restore drill                                  |
+| Caching            | Partial       | Redis is wired; no cache helper, stampede protection, or hit-rate metrics                |
+| Background jobs    | Strong        | No outbox, scheduler, or DLQ replay tooling                                              |
+| Integrations       | Good          | Paystack webhook has no timestamp window or event dedupe table                           |
+| Observability      | Strong core   | Logs, traces, metrics, Sentry linking; no SLOs, dashboards, or alerts                    |
+| Reliability        | Strong        | Cached readiness, drain on SIGTERM, timeouts, breaker; no load tests                     |
+| Security           | Partial       | Headers, CSP, dependency audit; no image scan, CSRF beyond Better Auth, or SSRF controls |
+| Testing            | Good          | Unit and integration suites in CI; no load or contract tests                             |
+| CI/CD              | Partial       | Checks, tests, audit, image build; no image scan or deploy                               |
+| Operations         | Absent        | No runbooks, on-call, SLOs, DR, or retention                                             |
 
-Two things this template does better than most starters, and you should keep both:
+Things worth keeping when you copy it:
 
-- The two-Redis split: `noeviction` for jobs, `allkeys-lru` for cache.
-- The error contract with Postgres SQLSTATE mapping.
+- The two-Redis split: `noeviction` for jobs, `allkeys-lru` for cache, each provided only where it belongs.
+- The error contract: RFC 9457 problems everywhere, with Postgres SQLSTATE mapping.
+- One rule for dependency injection: every service's layer provides its own dependencies.
+- Shutdown that flips readiness, waits, drains, then closes resources in reverse order.
 
-Two subtle bugs to fix before copying it:
-
-1. **OTel loads too late.** `initInstrumentation()` runs after the import graph has evaluated `pg` and `ioredis`. Auto-instrumentation patches modules as they load, so spans can be silently missed. Start the SDK from a preload entry (`bun --preload ./src/instrumentation.ts`) or an `--import` bootstrap.
-2. **Health and metrics pass through the global rate limiter.** In `src/app.ts`, `/metrics` is registered after `rateLimit`, so Prometheus scrapes consume rate-limit points. `/readyz` also opens database, S3, and SMTP checks on every probe. Mount them on a separate pipeline or exempt the paths, and make readiness cheap.
+The two bugs the earlier Hono version had are gone: no monkey-patching OpenTelemetry SDK can load too late (Effect emits its own spans), and health probes sit outside the rate limiter with a cached readiness check.
 
 ---
 
 ## 3. Build order from scratch
 
-Each phase leaves the app runnable. Do not skip ahead.
+Each phase leaves the app runnable. The paths name where this template does each step.
 
 ### Phase 0: Decide the runtime and topology
 
@@ -250,163 +249,89 @@ See [section 4](#4-runtime-fork-long-running-vs-serverless). Pick one model befo
 ### Phase 1: Scaffold and tooling
 
 ```sh
-mkdir my-api && cd my-api
 bun init -y
-bun add hono zod @hono/standard-validator
+bun add effect @effect/platform-bun
 bun add -d typescript @types/bun oxlint oxfmt husky lint-staged
-bunx husky init
 ```
 
-- Create `src/api`, `src/core`, `src/db`, `src/jobs`, `src/integrations`, `src/middleware`, `tests/unit`, and `tests/integration`.
-- Set `strict: true` in `tsconfig.json`.
-- Add scripts for `dev`, `worker`, `lint`, `format`, `format:check`, `typecheck`, `test`, `db:generate`, `db:migrate`, `db:seed`, and `openapi:generate`.
-- Configure `lint-staged` so hooks lint and format changed files.
+- `strict`, `exactOptionalPropertyTypes` and `noUncheckedIndexedAccess` in `tsconfig.json`.
+- Pin every Effect package to the same exact version; they release together.
+- `.gitattributes` with `eol=lf` so the formatter agrees on every platform.
 
 **Done when:** `bun run typecheck` and `bun run lint` pass on an empty app.
 
-### Phase 2: Environment schema and secrets
+### Phase 2: Config
 
-- Create `.env.example` with every variable, commented defaults, and a note on which are required in production.
-- Create `src/core/env.ts` with one Zod schema, `initEnv()` at entry, and `getEnv()` everywhere else. Log `z.prettifyError(error)` and throw on failure.
-- Add cross-field refinements for both-or-neither credentials, URL checks, minimum lengths, and safe defaults (`DOCS_ENABLED=false`, `LOG_LEVEL=info`).
-- Create `.env.test` and ignore all real env files.
+- `src/config.ts`: one `Config.all` group per domain; `Config.Redacted` for secrets; ranges and literals validated; safe defaults (`DOCS_ENABLED=false`).
+- `.env.example` with every variable and its default.
 
-**Done when:** a missing or malformed variable stops the process with one readable error before it binds a port.
+**Done when:** a missing or malformed variable stops the boot with a readable error before the port binds.
 
-### Phase 3: App shell and middleware order
+### Phase 3: HTTP contract and pipeline
 
-Create `src/app.ts` as a factory that takes dependencies (`env`, `auth`, middleware), and `src/index.ts` as the composition root. Middleware order is a security decision:
+- `src/http/api.ts`: the `HttpApi`, with feature groups under `/v1` behind the rate limiter and health probes outside it.
+- `src/http/errors.ts`: problem classes; `HttpApiMiddleware.ProblemDetails` for validation failures.
+- `src/http/middleware.ts`: client address (trusted proxies), request id, access log and request metrics, security headers, failure rendering, body limit, timeout; CORS from an allowlist.
+- `src/http/server.ts` and `src/main.ts`: Bun server, drain on shutdown.
 
-```ts
-app.use("*", contextStorage());
-app.use("*", requestId({ headerName: "" })); // do not trust client-supplied IDs
-app.use("*", secureHeaders());
-app.use("*", bodyLimit({ maxSize: 1_000_000 }));
-app.use("*", cors({ origin: allowlist, credentials: true }));
-app.use(middleware.otel);
-app.use(middleware.logger);
+**Done when:** `/healthz` returns 200, an unknown route returns a 404 problem, and every response has `x-request-id`.
 
-// Cheap rejects are done; now authenticate.
-app.use("*", authContext(auth));
+### Phase 4: Database
 
-// Rate limit before any database work.
-app.use(middleware.rateLimit);
-app.use("*", middleware.database);
-```
+- `src/platform/database.ts`: `PgClient` with pool limits, timeouts and `statement_timeout`; Drizzle on top.
+- `src/platform/database.error.ts`: SQLSTATE to problem mapping (unique to 409, not-null to 422, classes 08/53/57 to 503).
+- `src/db/schema`, `drizzle.config.ts`, `src/migrate.ts`: `db:generate`, then `db:migrate`; `push` only for local experiments.
+- Rule: multi-write operations run in `db.transaction`, with no network calls inside it.
 
-- Add `app.notFound(...)` and `app.onError(globalErrorHandler)`.
-- Mount `/healthz`, `/readyz`, `/metrics`, `/docs`, and `/openapi.json` before the global limiter, or exempt them.
-- Add a request timeout middleware for slow handlers.
+**Done when:** migrations apply to a fresh database, `/readyz` reports the database, and a duplicate insert returns 409.
 
-**Done when:** `curl /healthz` returns 200, `/metrics` is private in production, and an unknown route returns the JSON error envelope.
+### Phase 5: Authentication and authorization
 
-### Phase 4: Error contract and validation
+- `src/auth/auth.ts`: Better Auth with trusted origins, verification, reset, cookie cache, and Redis-backed rate limiting.
+- `src/auth/auth.middleware.ts`: `Authenticated` provides `CurrentUser`; resource ownership checks live in services.
+- Next: roles and permissions, and an audit log written by a job.
 
-- Define the `ErrorCode` union and `ErrorResponseBody` with `success`, `error.code`, `error.message`, optional `fields`, `requestId`, and `path`.
-- Add `AppError` subclasses for 400, 401, 403, 404, 409, 422, 429, 500, and 503.
-- Map Postgres SQLSTATEs to HTTP: `23505` to 409, `23503` to 409, `23502` to 422, `57014` to 503, and classes 08, 53, and 57 to 503. Never leak SQL or stack traces in production.
-- Validate with Zod at the route boundary and convert `ZodError` into field-level errors.
+**Done when:** an unauthenticated request gets 401, a session gets the user, and user A cannot read user B's record.
 
-**Done when:** every failure mode returns the same shape with a stable code, and production responses contain no internals.
+### Phase 6: Redis and rate limiting
 
-### Phase 5: Database
-
-```sh
-docker compose up -d postgres
-bun add drizzle-orm pg
-bun add -d drizzle-kit @types/pg
-```
-
-- In `src/core/db.ts`: a pool with max, idle, and connect timeouts, the Drizzle instance, `getDb()`, `dbMiddleware()`, `checkDbHealth()`, and `closeDb()`.
-- Add `src/db/schema/*` and `src/db/relations/*`, plus `drizzle.config.ts` pointing at the schema folder.
-- Run `bunx drizzle-kit generate`, review the SQL, then `bunx drizzle-kit migrate`. `push` is for local only; production uses `migrate`.
-- Add a seed script and a test database compose file.
-- Write down the transaction rule: multi-write operations use `db.transaction`, and no HTTP, queue, or email calls happen inside it.
-
-**Done when:** `/readyz` reports database latency, migrations apply to a fresh database, and a duplicate insert returns 409 instead of 500.
-
-### Phase 6: Authentication and authorization
-
-```sh
-bun add better-auth @better-auth/drizzle-adapter
-bun run auth:generate
-```
-
-- Configure Better Auth with the Drizzle adapter, trusted origins, email verification policy, password reset, session cookie cache, and Redis-backed rate limiting.
-- Add `authContext`, `optionalSession`, `requireSession`, and `getSessionUser`.
-- Mount the auth handler at a fixed base path.
-- Add authorization helpers next: role and permission checks plus resource ownership checks per route.
-- Add an `audit_log` table and write to it on login, role change, and privileged actions. It can be a queue job.
-
-**Done when:** an unauthenticated request gets 401, a valid session gets the user in context, and user A cannot read user B's record.
-
-### Phase 7: Cache and rate limiting
-
-```sh
-bun add ioredis rate-limiter-flexible cockatiel
-```
-
-- In `src/core/redis.ts`: a fail-fast client (`enableOfflineQueue: false`, command timeout), a health check, and graceful close.
-- In `src/middleware/rate-limit.ts`: configurable points and window, key prefix, per-IP and per-user and per-key limiters, `X-RateLimit-*` and `Retry-After` headers, a circuit breaker around Redis, and an explicit fail-open or fail-closed choice.
-- Add a cache helper with namespaced keys, TTL, explicit delete-on-write, and optional single-flight.
+- `src/platform/redis.ts`: separate cache and jobs instances.
+- `src/platform/rate-limits.ts`: token bucket with a timeout and circuit breaker, fail-open or fail-closed by config.
+- `src/http/rate-limit.ts`: per-client limits with `X-RateLimit-*` and `Retry-After`, plus per-endpoint policies.
 
 **Done when:** Redis going down does not take the API down, and a hot endpoint returns 429 under load.
 
-### Phase 8: Background jobs
+### Phase 7: Background jobs
 
-For a long-running deployment:
+- `src/jobs/queue.ts` and `*.queue.ts`: durable queues with backoff and an idempotency id.
+- `src/jobs/consume.ts`: worker loops with spans, metrics, and reporting on the final attempt.
+- `src/worker.ts`: the worker process. For serverless, see `.agents/skills/convert-to-serverless`.
 
-```sh
-bun add bullmq bullmq-otel
-```
+**Done when:** enqueue leads to execution, a failing job retries with backoff, and `SIGTERM` releases in-flight jobs for redelivery.
 
-- In `src/core/queue.ts`: a separate jobs Redis, `maxRetriesPerRequest: null`, default attempts and backoff and retention, and OTel telemetry.
-- In `src/jobs/index.ts`: queue configs with concurrency and limiter, a typed `defineJob({ queue, schema, run })`, and an `enqueue()` that validates before adding.
-- In `src/core/worker.ts`: one `Worker` per queue with completed, failed, stalled, and error handlers, and a dead-letter move after the final attempt.
-- In `src/worker.ts`: init env and instrumentation, start workers, and shut down gracefully.
+### Phase 8: Integrations
 
-For serverless, replace this phase with QStash (`@upstash/qstash`), a signed callback route that verifies the raw body, and `flowControl` instead of worker concurrency.
+- Storage with presigned URLs and timeouts; email through the queue with escaped templates and a shared send rate; payments with no automatic retries on money movement and verified webhooks.
+- Every outbound call has a timeout; reads retry transient failures, writes do not.
 
-**Done when:** enqueue leads to execution, a failing job retries with backoff and lands in the dead-letter queue, and `SIGTERM` finishes in-flight jobs before exit.
+**Done when:** a third-party outage degrades a feature instead of hanging a request.
 
-### Phase 9: Integrations
+### Phase 9: Observability
 
-- S3 client with a private bucket, presigned PUT and GET, short expiry, a path-style toggle for local, a health check, and optional bucket bootstrap.
-- Email: a provider adapter, templates, enqueue instead of inline sends, a per-relay rate limit, and bounce and complaint handling.
-- Payments and webhooks: signature verification on the raw body, a timestamp window, an event dedupe table, and a fast 2xx with the work queued.
-- One outbound HTTP helper with timeouts, retries, and a circuit breaker. No bare `fetch` in services.
+- `src/platform/observability.ts`: console JSON logs, OTLP traces, logs and metrics, Sentry error reporting linked to traces.
+- `observability/collector.yml`: fan-out to your backends; `collector.sentry.yml` adds Sentry for traces.
+- Define five to ten alerts on day one: 5xx rate, p95 latency, database pool saturation, queue backlog age, failed jobs, dependency failures, restart count.
 
-**Done when:** a third-party outage degrades a feature instead of hanging a request, and a replayed webhook is ignored.
+**Done when:** one request produces a log line, a trace and a metric that share a trace id, and a 500 shows up in Sentry linked to its trace.
 
-### Phase 10: Observability
+### Phase 10: Reliability hardening
 
-```sh
-bun add pino hono-pino @opentelemetry/sdk-node \
-  @opentelemetry/auto-instrumentations-node \
-  @opentelemetry/exporter-trace-otlp-http \
-  @opentelemetry/exporter-metrics-otlp-http \
-  @hono/otel prom-client @hono/prometheus @sentry/bun @sentry/hono
-```
-
-- Pino: JSON in production, pretty in dev, base fields for service and env and version, a redaction list, and an OTel trace and span mixin.
-- OTel: `service.name` and `service.version` resource attributes, OTLP trace and metric exporters, auto-instrumentation, and a sampling policy. Start it before the app graph through `bun --preload`.
-- Prometheus: default metrics plus RED metrics, a token on `/metrics`, and no public exposure.
-- Sentry: environment, release, a lower `tracesSampleRate` in production, and PII scrubbing.
-- Define five to ten alerts on day one: 5xx rate, p95 latency, database pool saturation, queue backlog age, dead-letter depth, dependency failures, and restart count.
-
-**Done when:** one request produces a log line, a trace, and a metric that can all be correlated by request ID.
-
-### Phase 11: Reliability hardening
-
-- Split liveness from readiness. Make readiness check only what is essential and cache the result for a few seconds.
-- Implement graceful shutdown with a drain deadline. This template closes pools but does not stop accepting HTTP.
-- Add per-request timeouts and a global body limit.
-- Add idempotency keys for retryable writes:
+- Idempotency keys for retryable writes:
 
 ```sql
 create table idempotency_keys (
   key text primary key,
-  user_id uuid not null,
+  user_id text not null,
   request_hash text not null,
   status text not null,          -- pending | completed | failed
   response jsonb,
@@ -416,57 +341,36 @@ create table idempotency_keys (
 create index on idempotency_keys (expires_at);
 ```
 
-- Add an outbox table when a database write must reliably trigger an event or email.
-- Add retry, dead-letter, and replay runbooks.
-- Load test the top three endpoints and record the numbers.
+- An outbox table when a database write must reliably trigger an event or email.
+- Retry, dead-letter and replay runbooks; load tests for the top three endpoints.
 
-**Done when:** `SIGTERM` drains cleanly, a duplicate `POST` with the same key returns the same response, and a dependency outage produces 503s rather than timeouts.
+**Done when:** a duplicate `POST` with the same key returns the same response, and a dependency outage produces 503s rather than timeouts.
 
-### Phase 12: Tests
+### Phase 11: Tests
 
-```sh
-docker compose -f docker-compose.test.yml up -d
-bun test tests/unit
-bun test tests/integration
-```
-
-- Unit: pure business logic, error mapping, and validators.
-- Integration: the real HTTP app against real Postgres, and Redis when used. One schema or transaction per test, with factories for fixtures.
-- For each endpoint: success, validation failure, unauthenticated, forbidden, not-found, and conflict.
-- Jobs: success, retry, idempotent replay, and dead-letter behavior.
-- Add a smoke test that boots the app and hits `/healthz` and `/readyz`.
+- Unit: business logic, error mapping, schemas, middleware through `HttpRouter.toWebHandler`, handlers through `HttpApiTest`, services with test layers.
+- Integration: the real HTTP app against real Postgres, Redis, S3 and SMTP (`docker-compose.test.yml`).
+- Per endpoint: success, validation failure, unauthenticated, forbidden, not found, conflict. Per job: success, retry, idempotent replay.
 
 **Done when:** CI fails on a broken endpoint without manual testing.
 
-### Phase 13: CI/CD and containers
+### Phase 12: CI/CD and containers
 
-CI should run, in order:
+CI (`.github/workflows/ci.yml`) runs lint, format, typecheck, unit tests, an `openapi.json` drift check, a schema-without-migration check, a dependency audit, integration tests against service containers, and an image build. Still to add: an image scan, then deploy.
 
-```yaml
-- bun ci
-- bun run lint
-- bun run format:check
-- bun run typecheck
-- bun test
-- bun run openapi:generate && git diff --exit-code openapi.json
-- docker build .
-- trivy image ...
-```
-
-- Multi-stage Dockerfile, production dependencies only, a non-root user, a healthcheck, `NODE_ENV=production`, and a pinned base image digest.
-- Deploy pipeline: build once, promote the same image, run migrations as a gate, deploy, smoke test, and roll back on failure.
-- IaC for the database, Redis, bucket, secrets, DNS, and monitoring.
-- Staging runs the same image and migrations as production.
+- One image, three commands (API, worker, migrate); non-root; healthcheck; exit 0 on SIGTERM.
+- Deploy pipeline: build once, promote the same image, run migrations as a gate, deploy, smoke test, roll back on failure.
+- IaC for the database, Redis, bucket, secrets, DNS and monitoring.
 
 **Done when:** a merge to `main` reaches staging without a human running commands, and rollback is one action.
 
-### Phase 14: Launch gate
+### Phase 13: Launch gate
 
 Do not ship until every item is true:
 
 - Every secret rotated and every development default removed.
-- `DOCS_ENABLED=false` and `/metrics` private.
-- Migrations applied with `migrate`, not `push`.
+- `DOCS_ENABLED` off unless the reference is meant to be public.
+- Migrations applied as a release step.
 - API and worker deployed separately, with resource limits and autoscaling bounds.
 - Backups enabled and a restore rehearsed.
 - Alerts routed to a human, with runbooks linked.
@@ -479,17 +383,17 @@ Do not ship until every item is true:
 
 ## 4. Runtime fork: long-running vs serverless
 
-| Concern  | Long-running (Bun, Docker, Fly, Railway, Render, K8s) | Serverless (Vercel, Cloudflare, Lambda)                |
-| -------- | ----------------------------------------------------- | ------------------------------------------------------ |
-| HTTP     | `Bun.serve` or a container                            | Platform handler                                       |
-| Postgres | `pg` pool plus PgBouncer                              | Neon HTTP driver or a pooler with `max: 1`, Hyperdrive |
-| Redis    | `ioredis` over TCP                                    | Upstash REST                                           |
-| Jobs     | BullMQ plus a separate worker                         | QStash, Cloudflare Queues, SQS                         |
-| Cron     | BullMQ repeatable jobs or a managed scheduler         | Platform cron                                          |
-| Metrics  | Prometheus scrape                                     | OTLP push, no scrape                                   |
-| Tracing  | Long-lived NodeSDK                                    | Flush through `waitUntil`                              |
-| Shutdown | `SIGTERM` drain                                       | None                                                   |
-| Files    | Local temp is fine                                    | R2 or S3 only                                          |
+| Concern  | Long-running (Bun, Docker, Fly, Railway, Render, K8s) | Serverless (Vercel, Lambda)                       |
+| -------- | ----------------------------------------------------- | ------------------------------------------------- |
+| HTTP     | `BunHttpServer` in a container                        | `HttpRouter.toWebHandler` as the platform handler |
+| Postgres | `@effect/sql-pg` pool, optionally behind PgBouncer    | Pooled URL, one connection, `prepare: false`      |
+| Redis    | `BunRedis` over TCP                                   | Upstash REST behind the same `Redis` service      |
+| Jobs     | `PersistedQueue` plus a separate worker               | QStash callbacks                                  |
+| Cron     | A scheduled job in the worker or a managed scheduler  | Platform cron                                     |
+| Metrics  | OTLP push                                             | OTLP push, flushed per invocation                 |
+| Tracing  | OTLP exporter on an interval                          | Flush through `waitUntil`                         |
+| Shutdown | `SIGTERM`: readiness flip, drain, close               | None                                              |
+| Files    | Local temp is fine                                    | S3 only                                           |
 
 Choose one model before scaffolding. This template assumes the left column. `.agents/skills/convert-to-serverless/SKILL.md` documents the migration to the right column.
 
@@ -506,7 +410,7 @@ OpenCode discovers skills in `.opencode/skills/<id>/SKILL.md`, and also in `.age
 This repo already has:
 
 - `backend-engineering-rules`: the non-negotiables for queries, transactions, idempotency, errors, security, migrations, and tests.
-- `convert-to-serverless`: the BullMQ to QStash and ioredis to Upstash migration path.
+- `convert-to-serverless`: the PersistedQueue to QStash and TCP Redis to Upstash REST migration path.
 - `customize-hono-template`: renaming and branding a new service.
 
 Add project-specific skills as patterns repeat:
@@ -543,7 +447,7 @@ Add only what you will use. Each server's tools consume context. Configure with 
 
 Useful for backend work:
 
-- **context7**: current framework and library docs for Hono, Drizzle, Better Auth, and BullMQ.
+- **context7**: current framework and library docs for Effect, Drizzle, and Better Auth.
 - **Postgres or Neon MCP**: inspect schema, run read-only queries, and explain plans. Point it at staging or local, never production writes.
 - **Sentry MCP**: pull issue context, stack traces, and recent events.
 - **Cloudflare or Vercel MCP**: deployments, logs, and resource state.
