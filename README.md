@@ -10,6 +10,8 @@ A production-minded API starter on [Bun](https://bun.sh) and [Effect v4](https:/
 - **Integrations:** S3-compatible storage, SMTP email with escaped HTML templates, Paystack payments and webhooks
 - **Operations:** OpenTelemetry traces, logs and metrics; Sentry errors linked to traces; graceful shutdown
 
+New to Effect? Start with [docs/effect-for-beginners.md](docs/effect-for-beginners.md): every Effect concept this repo uses, explained with its own code.
+
 ## Requirements
 
 - [Bun](https://bun.sh) 1.4+
