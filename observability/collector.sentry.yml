@@ -1,0 +1,18 @@
+# Overlay for collector.yml: also sends traces to Sentry's OTLP endpoint.
+# Sentry links error events (sent by the app's Sentry SDK) to these traces by trace id.
+#
+# SENTRY_OTLP_ENDPOINT: Project Settings > Client Keys > OTLP, without the /v1/traces suffix,
+#   e.g. https://o0.ingest.us.sentry.io/api/0/integration/otlp
+# SENTRY_PUBLIC_KEY: the public key from the same page (the DSN's user part).
+exporters:
+  otlphttp/sentry:
+    endpoint: ${env:SENTRY_OTLP_ENDPOINT}
+    headers:
+      x-sentry-auth: "sentry sentry_key=${env:SENTRY_PUBLIC_KEY}"
+    compression: gzip
+    encoding: proto
+
+service:
+  pipelines:
+    traces:
+      exporters: [otlphttp/lgtm, otlphttp/sentry, debug]

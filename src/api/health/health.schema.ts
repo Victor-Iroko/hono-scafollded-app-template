@@ -1,24 +1,23 @@
-import { z } from "zod";
+import { Schema } from "effect";
 
-export const healthResponseSchema = z.object({ ok: z.literal(true) });
+export const HealthResponse = Schema.Struct({ ok: Schema.Literal(true) });
 
-const dependencyHealthSchema = z.object({
-  ok: z.boolean(),
-  latencyMs: z.number(),
+export const DependencyCheck = Schema.Struct({
+  ok: Schema.Boolean,
+  latencyMs: Schema.Number,
 });
 
-export const readyResponseSchema = z.object({
-  ok: z.literal(true),
-  db: dependencyHealthSchema,
-  redis: dependencyHealthSchema,
-  s3: dependencyHealthSchema,
-  email: dependencyHealthSchema,
+export const DependencyChecks = Schema.Struct({
+  database: DependencyCheck,
+  cacheRedis: DependencyCheck,
+  jobsRedis: DependencyCheck,
+  storage: DependencyCheck,
 });
 
-export const notReadyResponseSchema = z.object({
-  ok: z.literal(false),
-  db: dependencyHealthSchema,
-  redis: dependencyHealthSchema,
-  s3: dependencyHealthSchema,
-  email: dependencyHealthSchema,
+export const ReadyResponse = Schema.Struct({
+  ok: Schema.Literal(true),
+  checks: DependencyChecks,
 });
+
+export type DependencyCheck = typeof DependencyCheck.Type;
+export type DependencyChecks = typeof DependencyChecks.Type;

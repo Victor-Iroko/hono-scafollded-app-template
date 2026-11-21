@@ -14,10 +14,19 @@
 
 ## API modules
 
-- Organize the `api` folder into domain modules. Each module should have a `<module>.router.ts`, `<module>.schema.ts`, and `<module>.service.ts` file. Add a `<module>.error.ts` file when the module needs custom errors specific to that domain.
-- Keep HTTP routes and request/response handling in `<module>.router.ts`.
-- Define the module's validation schemas and related input/output types in `<module>.schema.ts`.
-- Put the module's business logic and data operations in `<module>.service.ts`; keep that logic out of the router.
+- Organize the `api` folder into domain modules. Each module has a `<module>.api.ts`, `<module>.handlers.ts`, `<module>.schema.ts`, and `<module>.service.ts` file. Add a `<module>.error.ts` file when the module needs custom errors specific to that domain.
+- Declare the module's endpoints as an `HttpApiGroup` in `<module>.api.ts` and add the group to `src/http/api.ts`.
+- Keep `<module>.handlers.ts` thin: map each endpoint to a service call with `HttpApiBuilder.group`.
+- Define the module's request/response schemas with `effect/Schema` in `<module>.schema.ts`.
+- Fail handlers with the problem classes in `src/http/errors.ts` (or a module-specific `HttpApiError.Problem` in `<module>.error.ts`) and declare them in the endpoint's `error` option.
+- Put the module's business logic and data operations in `<module>.service.ts`; keep that logic out of the handlers.
+
+## Services and layers
+
+- Define services with `Context.Service` and give each one a `static readonly layer` that already provides the service's own dependencies, so callers never wire them.
+- Use `Effect.fn("<Service>.<method>")` for service methods, `Schema.TaggedError` for failures, and `Effect.acquireRelease` for resources. No `globalThis` caches or module-level singletons.
+- Read environment variables only through the `Config` groups in `src/config.ts`.
+- Protect endpoints with `.middleware(Authenticated)` on the group and read the user with `yield* CurrentUser` (`src/auth/auth.middleware.ts`); check resource ownership in the service.
 
 ## Tests
 

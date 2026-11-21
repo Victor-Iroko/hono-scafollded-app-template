@@ -1,35 +1,69 @@
+// Better Auth, built inside an Effect layer.
+//
+// Better Auth's Drizzle adapter is Promise-based, so it gets drizzle's
+// pg-proxy driver whose queries run on the app's @effect/sql-pg client: same
+// pool, statement timeout, SQL spans and error mapping as every other query.
+// Its callbacks (queries, rate-limit storage, emails, logs) run Effects through
+// the context the layer captured.
 import { drizzleAdapter } from "@better-auth/drizzle-adapter";
+import type { BetterAuthRateLimitStorage } from "better-auth";
 import { betterAuth } from "better-auth/minimal";
 import { openAPI } from "better-auth/plugins";
-import { getDb } from "../core/db";
-import type { DB } from "../core/db";
-import type { ENV } from "../core/env";
-import { getLogger } from "../core/logger";
+import { effectPgCodecs } from "drizzle-orm/effect-postgres/codecs";
+import { drizzle, type PgRemoteDatabase, type RemoteCallback } from "drizzle-orm/pg-proxy";
+import { Context, Duration, Effect, Layer, Option, Redacted } from "effect";
+import { AuthConfig, HttpConfig } from "../config";
 import * as authSchema from "../db/schema/auth";
-import { AUTH_BASE_PATH } from "./constants";
-import { createRedisRateLimitStorage } from "./rate-limit-storage";
+import { EmailService, type EnqueueEmail } from "../integrations/email/email.service";
+import { Database } from "../platform/database";
+import { RateLimits } from "../platform/rate-limits";
 
-type AuthEnv = Pick<
-  ENV,
-  | "BETTER_AUTH_SECRET"
-  | "BETTER_AUTH_URL"
-  | "BETTER_AUTH_TRUSTED_ORIGINS"
-  | "AUTH_REQUIRE_EMAIL_VERIFICATION"
-  | "AUTH_TRUST_PROXY_HEADERS"
-  | "GOOGLE_CLIENT_ID"
-  | "GOOGLE_CLIENT_SECRET"
->;
+export const AUTH_BASE_PATH = "/api/auth";
 
-export function createAuth(env: AuthEnv, db: DB = getDb()) {
-  const baseURL = env.BETTER_AUTH_URL.replace(/\/+$/, "");
-  const trustedOrigins = [
-    ...new Set([new URL(baseURL).origin, ...env.BETTER_AUTH_TRUSTED_ORIGINS]),
-  ];
+/**
+ * Better Auth reads the client IP from this header only. The auth route sets
+ * it from the address the HTTP pipeline resolved (TRUSTED_PROXIES aware) and
+ * drops any value the client sent.
+ */
+export const CLIENT_IP_HEADER = "x-client-ip";
+
+/** An email Better Auth asks us to send; `data` holds tokens, so it is never logged. */
+export type AuthEmail = {
+  [N in "welcome" | "verifyEmail" | "passwordReset"]: EnqueueEmail<N> & { readonly to: string };
+}["welcome" | "verifyEmail" | "passwordReset"];
+
+export interface AuthOptions {
+  readonly baseUrl: string;
+  readonly secret: string;
+  readonly trustedOrigins: ReadonlyArray<string>;
+  readonly requireEmailVerification: boolean;
+  readonly google: Option.Option<{ readonly clientId: string; readonly clientSecret: string }>;
+  readonly rateLimitStorage?: BetterAuthRateLimitStorage;
+  /** Hands an auth email off for delivery. Must not throw. */
+  readonly sendEmail: (email: AuthEmail) => Promise<void>;
+  /** Receives Better Auth's own log lines. */
+  readonly log?: (level: "debug" | "info" | "warn" | "error", message: string) => void;
+}
+
+const TOKEN_TTL_S = 60 * 60;
+
+/** Pure Better Auth factory; the layer below and the OpenAPI script both use it. */
+/**
+ * A Promise-based Drizzle for Better Auth whose queries run through `run`.
+ * `all` queries return rows as arrays, `execute` as objects, which is what the
+ * pg-proxy driver expects; the Effect codecs match @effect/sql-pg's values.
+ */
+export const makeAuthDatabase = (query: RemoteCallback) =>
+  drizzle(query, { codecs: effectPgCodecs });
+
+export function createAuth(db: PgRemoteDatabase, options: AuthOptions) {
+  const baseURL = options.baseUrl.replace(/\/+$/, "");
+  const trustedOrigins = [...new Set([new URL(baseURL).origin, ...options.trustedOrigins])];
 
   return betterAuth({
     baseURL,
     basePath: AUTH_BASE_PATH,
-    secret: env.BETTER_AUTH_SECRET,
+    secret: options.secret,
     trustedOrigins,
     disabledPaths: ["/open-api/generate-schema"],
     database: drizzleAdapter(db, {
@@ -43,79 +77,49 @@ export function createAuth(env: AuthEnv, db: DB = getDb()) {
     }),
     emailAndPassword: {
       enabled: true,
-      requireEmailVerification: env.AUTH_REQUIRE_EMAIL_VERIFICATION,
-      resetPasswordTokenExpiresIn: 60 * 60,
+      requireEmailVerification: options.requireEmailVerification,
+      resetPasswordTokenExpiresIn: TOKEN_TTL_S,
       revokeSessionsOnPasswordReset: true,
-      sendResetPassword: async ({ user, url }) => {
-        void import("../integrations/email")
-          .then(({ enqueueEmail }) =>
-            enqueueEmail({
-              template: "passwordReset",
-              to: user.email,
-              data: { name: user.name, resetUrl: url, expiresInMinutes: 60 },
-            }),
-          )
-          .catch((err) =>
-            getLogger().warn({ err, userId: user.id }, "failed to enqueue password reset email"),
-          );
-      },
+      sendResetPassword: ({ user, url }) =>
+        options.sendEmail({
+          template: "passwordReset",
+          to: user.email,
+          data: { name: user.name, resetUrl: url, expiresInMinutes: TOKEN_TTL_S / 60 },
+        }),
     },
     emailVerification: {
       sendOnSignIn: false,
       autoSignInAfterVerification: true,
-      expiresIn: 60 * 60,
-      sendVerificationEmail: async ({ user, url }) => {
-        void import("../integrations/email")
-          .then(({ enqueueEmail }) =>
-            enqueueEmail({
-              template: "verifyEmail",
-              to: user.email,
-              data: { name: user.name, verifyUrl: url, expiresInMinutes: 60 },
-            }),
-          )
-          .catch((err) =>
-            getLogger().warn({ err, userId: user.id }, "failed to enqueue verification email"),
-          );
-      },
+      expiresIn: TOKEN_TTL_S,
+      sendVerificationEmail: ({ user, url }) =>
+        options.sendEmail({
+          template: "verifyEmail",
+          to: user.email,
+          data: { name: user.name, verifyUrl: url, expiresInMinutes: TOKEN_TTL_S / 60 },
+        }),
     },
-    socialProviders:
-      env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET
-        ? {
-            google: {
-              clientId: env.GOOGLE_CLIENT_ID,
-              clientSecret: env.GOOGLE_CLIENT_SECRET,
-            },
-          }
-        : {},
-    session: {
-      cookieCache: {
-        enabled: true,
-        maxAge: 5 * 60, // 5 minutes
-      },
-    },
-    advanced: {
-      trustedProxyHeaders: env.AUTH_TRUST_PROXY_HEADERS,
-    },
+    socialProviders: Option.match(options.google, {
+      onNone: () => ({}),
+      onSome: (google) => ({ google }),
+    }),
+    session: { cookieCache: { enabled: true, maxAge: 5 * 60 } },
+    advanced: { ipAddress: { ipAddressHeaders: [CLIENT_IP_HEADER] } },
     rateLimit: {
       enabled: true,
-      customStorage: createRedisRateLimitStorage(),
+      ...(options.rateLimitStorage ? { customStorage: options.rateLimitStorage } : {}),
     },
     plugins: [openAPI({ disableDefaultReference: true })],
+    ...(options.log ? { logger: { log: options.log } } : {}),
     databaseHooks: {
       user: {
         create: {
           after: async (user) => {
-            void import("../integrations/email")
-              .then(({ enqueueEmail }) =>
-                enqueueEmail({
-                  template: "welcome",
-                  to: user.email,
-                  data: { name: user.name, loginUrl: baseURL },
-                }),
-              )
-              .catch((err) =>
-                getLogger().warn({ err, userId: user.id }, "failed to enqueue welcome email"),
-              );
+            await options.sendEmail({
+              template: "welcome",
+              idempotencyKey: `welcome:${user.id}`,
+              to: user.email,
+              data: { name: user.name, loginUrl: baseURL },
+            });
           },
         },
       },
@@ -124,3 +128,103 @@ export function createAuth(env: AuthEnv, db: DB = getDb()) {
 }
 
 export type AppAuth = ReturnType<typeof createAuth>;
+export type AuthSession = NonNullable<Awaited<ReturnType<AppAuth["api"]["getSession"]>>>;
+
+/** Shares the token-bucket store; an unreachable Redis must not block sign-in. */
+const rateLimitStorage = (
+  limits: RateLimits["Service"],
+  run: <A>(effect: Effect.Effect<A>) => Promise<A>,
+) =>
+  ({
+    consume: (key, rule) =>
+      run(
+        limits
+          .consume({
+            key: `auth:${key}`,
+            capacity: rule.max,
+            refillWindow: Duration.seconds(rule.window),
+          })
+          .pipe(
+            Effect.map((decision) =>
+              decision._tag === "Limited"
+                ? {
+                    allowed: false,
+                    retryAfter: Math.max(1, Math.ceil(Duration.toSeconds(decision.retryAfter))),
+                  }
+                : { allowed: true, retryAfter: null },
+            ),
+          ),
+      ),
+  }) satisfies BetterAuthRateLimitStorage;
+
+const logAtLevel = {
+  debug: Effect.logDebug,
+  info: Effect.logInfo,
+  warn: Effect.logWarning,
+  error: Effect.logError,
+} as const;
+
+export class BetterAuth extends Context.Service<BetterAuth, AppAuth>()("app/BetterAuth") {
+  static readonly layer = Layer.effect(
+    BetterAuth,
+    Effect.gen(function* () {
+      const auth = yield* AuthConfig;
+      const http = yield* HttpConfig;
+      const { $client: sql } = yield* Database;
+      const limits = yield* RateLimits;
+      const emails = yield* EmailService;
+      const context = yield* Effect.context<never>();
+      const run = Effect.runPromiseWith(context);
+
+      if (Option.isSome(auth.googleClientId) !== Option.isSome(auth.googleClientSecret)) {
+        return yield* Effect.fail(
+          new Error("GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET must be set together"),
+        );
+      }
+      const google = Option.zipWith(
+        auth.googleClientId,
+        auth.googleClientSecret,
+        (clientId, secret) => ({
+          clientId,
+          clientSecret: Redacted.value(secret),
+        }),
+      );
+
+      const authDatabase = makeAuthDatabase((text, params, method) =>
+        run(
+          (method === "all"
+            ? sql.unsafe(text, params).values
+            : sql.unsafe(text, params).withoutTransform
+          ).pipe(
+            Effect.map((rows) => ({ rows: [...rows] })),
+            Effect.withSpan("BetterAuth.query"),
+          ),
+        ),
+      );
+
+      return createAuth(authDatabase, {
+        baseUrl: auth.baseUrl.toString(),
+        secret: Redacted.value(auth.secret),
+        trustedOrigins: http.trustedOrigins,
+        requireEmailVerification: auth.requireEmailVerification,
+        google,
+        rateLimitStorage: rateLimitStorage(limits, run),
+        // Message only: Better Auth's extra arguments can include emails and payloads.
+        log: (level, message) =>
+          void run(logAtLevel[level](message).pipe(Effect.annotateLogs({ source: "better-auth" }))),
+        // A queue failure must not fail sign-up; it is logged (without `data`) instead.
+        sendEmail: (email) =>
+          run(
+            emails.enqueue(email).pipe(
+              Effect.asVoid,
+              Effect.catchTag("EmailEnqueueError", (error) =>
+                Effect.logError("auth email not queued").pipe(
+                  Effect.annotateLogs({ template: email.template, cause: error.cause }),
+                ),
+              ),
+            ),
+          ),
+      });
+    }),
+  ).pipe(Layer.provide([Database.layer, RateLimits.layer, EmailService.layer]));
+}

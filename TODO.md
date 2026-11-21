@@ -1,13 +1,11 @@
 `rate-limit.ts`
 
-- Unknown for rate limit (they get pooled together)
-- Custom header for generator key instead of relying on x-forwarded-for
-- Only counting timeouts as failures for the circuit braker guard for rate-limiting
-- the assumption of 1 request = 1 point in the response headers calculation
+- Requests without a remote address share one `unknown` bucket (only possible on unix sockets and in tests)
+- Optional client key from a custom header (API key, user id) instead of the IP
 
-`db-errors.ts`
+`database.error.ts`
 
-- field-specific `fields` for `23505`: constraint names cannot be parsed — a composite key like `users_org_id_email_key` reads exactly like a single-column unique on `email` — so a duplicate email currently returns a generic 409 with no `fields` entry. A declarative `Record<constraintName, fieldPath>` consulted in `describeDbError()` gives signup forms the field back without guessing, and any unlisted constraint keeps falling back to the generic message. Needs seed entries as unique constraints land in `src/db/schema`
+- field-specific `fields` for `23505`: constraint names cannot be parsed — a composite key like `users_org_id_email_key` reads exactly like a single-column unique on `email` — so a duplicate email currently returns a generic 409 with no `fields` entry. A declarative `Record<constraintName, fieldPath>` consulted in `classifyDatabaseError()` gives signup forms the field back without guessing, and any unlisted constraint keeps falling back to the generic message. Needs entries as unique constraints land in `src/db/schema`
 
 `email` — delivery tracking (deferred from the first pass)
 

@@ -2,181 +2,9 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Hono Scaffolded App API",
-    "description": "HTTP API for the Hono scaffolded application.",
-    "version": "1.0.0"
+    "version": "1.0.0",
+    "description": "HTTP API for the scaffolded application."
   },
-  "components": {
-    "schemas": {
-      "User": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string",
-            "readOnly": true
-          },
-          "name": {
-            "type": "string"
-          },
-          "email": {
-            "type": "string"
-          },
-          "emailVerified": {
-            "type": "boolean",
-            "default": false,
-            "readOnly": true
-          },
-          "image": {
-            "type": "string"
-          },
-          "createdAt": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "updatedAt": {
-            "type": "string",
-            "format": "date-time"
-          }
-        },
-        "required": ["id", "name", "email", "emailVerified", "createdAt", "updatedAt"]
-      },
-      "Session": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string",
-            "readOnly": true
-          },
-          "expiresAt": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "token": {
-            "type": "string"
-          },
-          "createdAt": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "updatedAt": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "ipAddress": {
-            "type": "string"
-          },
-          "userAgent": {
-            "type": "string"
-          },
-          "userId": {
-            "type": "string"
-          }
-        },
-        "required": ["id", "expiresAt", "token", "createdAt", "updatedAt", "userId"]
-      },
-      "Account": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string",
-            "readOnly": true
-          },
-          "accountId": {
-            "type": "string"
-          },
-          "providerId": {
-            "type": "string"
-          },
-          "userId": {
-            "type": "string"
-          },
-          "accessToken": {
-            "type": "string"
-          },
-          "refreshToken": {
-            "type": "string"
-          },
-          "idToken": {
-            "type": "string"
-          },
-          "accessTokenExpiresAt": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "refreshTokenExpiresAt": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "scope": {
-            "type": "string"
-          },
-          "password": {
-            "type": "string"
-          },
-          "createdAt": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "updatedAt": {
-            "type": "string",
-            "format": "date-time"
-          }
-        },
-        "required": ["id", "accountId", "providerId", "userId", "createdAt", "updatedAt"]
-      },
-      "Verification": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string",
-            "readOnly": true
-          },
-          "identifier": {
-            "type": "string"
-          },
-          "value": {
-            "type": "string"
-          },
-          "expiresAt": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "createdAt": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "updatedAt": {
-            "type": "string",
-            "format": "date-time"
-          }
-        },
-        "required": ["id", "identifier", "value", "expiresAt", "createdAt", "updatedAt"]
-      }
-    },
-    "securitySchemes": {
-      "apiKeyCookie": {
-        "type": "apiKey",
-        "in": "cookie",
-        "name": "apiKeyCookie",
-        "description": "API Key authentication via cookie"
-      },
-      "bearerAuth": {
-        "type": "http",
-        "scheme": "bearer",
-        "description": "Bearer token authentication"
-      },
-      "cookieAuth": {
-        "type": "apiKey",
-        "in": "cookie",
-        "name": "better-auth.session_token"
-      }
-    }
-  },
-  "tags": [
-    {
-      "name": "Auth",
-      "description": "Authentication endpoints."
-    }
-  ],
   "paths": {
     "/api/auth/sign-in/social": {
       "post": {
@@ -5098,103 +4926,129 @@
         }
       }
     },
-    "/healthz": {
+    "/v1/me": {
       "get": {
-        "operationId": "getHealth",
-        "summary": "Check whether the process is alive",
+        "tags": ["account"],
+        "operationId": "account.getMe",
+        "parameters": [],
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
         "responses": {
           "200": {
-            "description": "The process is alive",
+            "description": "Success",
             "content": {
               "application/json": {
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "ok": {
-                      "type": "boolean",
-                      "const": true
+                    "id": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "email": {
+                      "type": "string"
+                    },
+                    "emailVerified": {
+                      "type": "boolean"
+                    },
+                    "image": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "createdAt": {
+                      "type": "string"
                     }
                   },
-                  "required": ["ok"]
+                  "required": ["id", "name", "email", "emailVerified", "image", "createdAt"],
+                  "additionalProperties": false
                 }
               }
             }
-          }
-        }
-      }
-    },
-    "/readyz": {
-      "get": {
-        "operationId": "getReadiness",
-        "summary": "Check whether required dependencies are ready",
-        "responses": {
-          "200": {
-            "description": "All dependencies are ready",
+          },
+          "400": {
+            "description": "Bad Request",
             "content": {
-              "application/json": {
+              "application/problem+json": {
                 "schema": {
-                  "type": "object",
-                  "properties": {
-                    "ok": {
-                      "type": "boolean",
-                      "const": true
-                    },
-                    "db": {
-                      "type": "object",
-                      "properties": {
-                        "ok": {
-                          "type": "boolean"
-                        },
-                        "latencyMs": {
-                          "type": "number"
-                        }
-                      },
-                      "required": ["ok", "latencyMs"]
-                    },
-                    "redis": {
-                      "type": "object",
-                      "properties": {
-                        "ok": {
-                          "type": "boolean"
-                        },
-                        "latencyMs": {
-                          "type": "number"
-                        }
-                      },
-                      "required": ["ok", "latencyMs"]
-                    },
-                    "s3": {
-                      "type": "object",
-                      "properties": {
-                        "ok": {
-                          "type": "boolean"
-                        },
-                        "latencyMs": {
-                          "type": "number"
-                        }
-                      },
-                      "required": ["ok", "latencyMs"]
-                    },
-                    "email": {
-                      "type": "object",
-                      "properties": {
-                        "ok": {
-                          "type": "boolean"
-                        },
-                        "latencyMs": {
-                          "type": "number"
-                        }
-                      },
-                      "required": ["ok", "latencyMs"]
-                    }
-                  },
-                  "required": ["ok", "db", "redis", "s3", "email"]
+                  "$ref": "#/components/schemas/BadRequestProblemEncoded"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundEncoded"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TooManyRequestsEncoded"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InternalServerErrorProblemEncoded"
                 }
               }
             }
           },
           "503": {
-            "description": "One or more dependencies are unavailable",
+            "description": "Service Unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ServiceUnavailableEncoded"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Get the signed-in user's profile"
+      }
+    },
+    "/healthz": {
+      "get": {
+        "tags": ["health"],
+        "operationId": "getHealth",
+        "parameters": [],
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Success",
             "content": {
               "application/json": {
                 "schema": {
@@ -5202,64 +5056,668 @@
                   "properties": {
                     "ok": {
                       "type": "boolean",
-                      "const": false
-                    },
-                    "db": {
-                      "type": "object",
-                      "properties": {
-                        "ok": {
-                          "type": "boolean"
-                        },
-                        "latencyMs": {
-                          "type": "number"
-                        }
-                      },
-                      "required": ["ok", "latencyMs"]
-                    },
-                    "redis": {
-                      "type": "object",
-                      "properties": {
-                        "ok": {
-                          "type": "boolean"
-                        },
-                        "latencyMs": {
-                          "type": "number"
-                        }
-                      },
-                      "required": ["ok", "latencyMs"]
-                    },
-                    "s3": {
-                      "type": "object",
-                      "properties": {
-                        "ok": {
-                          "type": "boolean"
-                        },
-                        "latencyMs": {
-                          "type": "number"
-                        }
-                      },
-                      "required": ["ok", "latencyMs"]
-                    },
-                    "email": {
-                      "type": "object",
-                      "properties": {
-                        "ok": {
-                          "type": "boolean"
-                        },
-                        "latencyMs": {
-                          "type": "number"
-                        }
-                      },
-                      "required": ["ok", "latencyMs"]
+                      "enum": [true]
                     }
                   },
-                  "required": ["ok", "db", "redis", "s3", "email"]
+                  "required": ["ok"],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BadRequestProblemEncoded"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InternalServerErrorProblemEncoded"
                 }
               }
             }
           }
-        }
+        },
+        "summary": "Check whether the process is alive"
+      }
+    },
+    "/readyz": {
+      "get": {
+        "tags": ["health"],
+        "operationId": "getReadiness",
+        "parameters": [],
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean",
+                      "enum": [true]
+                    },
+                    "checks": {
+                      "type": "object",
+                      "properties": {
+                        "database": {
+                          "type": "object",
+                          "properties": {
+                            "ok": {
+                              "type": "boolean"
+                            },
+                            "latencyMs": {
+                              "anyOf": [
+                                {
+                                  "type": "number"
+                                },
+                                {
+                                  "type": "string",
+                                  "enum": ["Infinity", "-Infinity", "NaN"]
+                                }
+                              ]
+                            }
+                          },
+                          "required": ["ok", "latencyMs"],
+                          "additionalProperties": false
+                        },
+                        "cacheRedis": {
+                          "type": "object",
+                          "properties": {
+                            "ok": {
+                              "type": "boolean"
+                            },
+                            "latencyMs": {
+                              "anyOf": [
+                                {
+                                  "type": "number"
+                                },
+                                {
+                                  "type": "string",
+                                  "enum": ["Infinity", "-Infinity", "NaN"]
+                                }
+                              ]
+                            }
+                          },
+                          "required": ["ok", "latencyMs"],
+                          "additionalProperties": false
+                        },
+                        "jobsRedis": {
+                          "type": "object",
+                          "properties": {
+                            "ok": {
+                              "type": "boolean"
+                            },
+                            "latencyMs": {
+                              "anyOf": [
+                                {
+                                  "type": "number"
+                                },
+                                {
+                                  "type": "string",
+                                  "enum": ["Infinity", "-Infinity", "NaN"]
+                                }
+                              ]
+                            }
+                          },
+                          "required": ["ok", "latencyMs"],
+                          "additionalProperties": false
+                        },
+                        "storage": {
+                          "type": "object",
+                          "properties": {
+                            "ok": {
+                              "type": "boolean"
+                            },
+                            "latencyMs": {
+                              "anyOf": [
+                                {
+                                  "type": "number"
+                                },
+                                {
+                                  "type": "string",
+                                  "enum": ["Infinity", "-Infinity", "NaN"]
+                                }
+                              ]
+                            }
+                          },
+                          "required": ["ok", "latencyMs"],
+                          "additionalProperties": false
+                        }
+                      },
+                      "required": ["database", "cacheRedis", "jobsRedis", "storage"],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": ["ok", "checks"],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BadRequestProblemEncoded"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InternalServerErrorProblemEncoded"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotReadyEncoded"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Check whether the service can take traffic"
       }
     }
-  }
+  },
+  "components": {
+    "schemas": {
+      "User": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "readOnly": true
+          },
+          "name": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string"
+          },
+          "emailVerified": {
+            "type": "boolean",
+            "default": false,
+            "readOnly": true
+          },
+          "image": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": ["id", "name", "email", "emailVerified", "createdAt", "updatedAt"]
+      },
+      "Session": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "readOnly": true
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "token": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "ipAddress": {
+            "type": "string"
+          },
+          "userAgent": {
+            "type": "string"
+          },
+          "userId": {
+            "type": "string"
+          }
+        },
+        "required": ["id", "expiresAt", "token", "createdAt", "updatedAt", "userId"]
+      },
+      "Account": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "readOnly": true
+          },
+          "accountId": {
+            "type": "string"
+          },
+          "providerId": {
+            "type": "string"
+          },
+          "userId": {
+            "type": "string"
+          },
+          "accessToken": {
+            "type": "string"
+          },
+          "refreshToken": {
+            "type": "string"
+          },
+          "idToken": {
+            "type": "string"
+          },
+          "accessTokenExpiresAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "refreshTokenExpiresAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "scope": {
+            "type": "string"
+          },
+          "password": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": ["id", "accountId", "providerId", "userId", "createdAt", "updatedAt"]
+      },
+      "Verification": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "readOnly": true
+          },
+          "identifier": {
+            "type": "string"
+          },
+          "value": {
+            "type": "string"
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": ["id", "identifier", "value", "expiresAt", "createdAt", "updatedAt"]
+      },
+      "InternalServerErrorProblemEncoded": {
+        "type": "object",
+        "properties": {
+          "detail": {
+            "type": "string"
+          },
+          "instance": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string",
+            "enum": ["about:blank"]
+          },
+          "status": {
+            "type": "number",
+            "enum": [500]
+          },
+          "title": {
+            "type": "string",
+            "enum": ["Internal Server Error"]
+          }
+        },
+        "required": ["type"],
+        "additionalProperties": false
+      },
+      "BadRequestProblemEncoded": {
+        "type": "object",
+        "properties": {
+          "detail": {
+            "type": "string"
+          },
+          "instance": {
+            "type": "string"
+          },
+          "errors": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "path": {
+                  "type": "array",
+                  "items": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "string",
+                        "enum": ["Infinity", "-Infinity", "NaN"]
+                      }
+                    ]
+                  }
+                },
+                "message": {
+                  "type": "string"
+                }
+              },
+              "required": ["path", "message"],
+              "additionalProperties": false
+            }
+          },
+          "type": {
+            "type": "string",
+            "enum": ["about:blank"]
+          },
+          "status": {
+            "type": "number",
+            "enum": [400]
+          },
+          "title": {
+            "type": "string",
+            "enum": ["Bad Request"]
+          }
+        },
+        "required": ["type"],
+        "additionalProperties": false
+      },
+      "NotReadyEncoded": {
+        "type": "object",
+        "properties": {
+          "detail": {
+            "type": "string"
+          },
+          "instance": {
+            "type": "string"
+          },
+          "draining": {
+            "type": "boolean"
+          },
+          "checks": {
+            "type": "object",
+            "properties": {
+              "database": {
+                "type": "object",
+                "properties": {
+                  "ok": {
+                    "type": "boolean"
+                  },
+                  "latencyMs": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "string",
+                        "enum": ["Infinity", "-Infinity", "NaN"]
+                      }
+                    ]
+                  }
+                },
+                "required": ["ok", "latencyMs"],
+                "additionalProperties": false
+              },
+              "cacheRedis": {
+                "type": "object",
+                "properties": {
+                  "ok": {
+                    "type": "boolean"
+                  },
+                  "latencyMs": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "string",
+                        "enum": ["Infinity", "-Infinity", "NaN"]
+                      }
+                    ]
+                  }
+                },
+                "required": ["ok", "latencyMs"],
+                "additionalProperties": false
+              },
+              "jobsRedis": {
+                "type": "object",
+                "properties": {
+                  "ok": {
+                    "type": "boolean"
+                  },
+                  "latencyMs": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "string",
+                        "enum": ["Infinity", "-Infinity", "NaN"]
+                      }
+                    ]
+                  }
+                },
+                "required": ["ok", "latencyMs"],
+                "additionalProperties": false
+              },
+              "storage": {
+                "type": "object",
+                "properties": {
+                  "ok": {
+                    "type": "boolean"
+                  },
+                  "latencyMs": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "string",
+                        "enum": ["Infinity", "-Infinity", "NaN"]
+                      }
+                    ]
+                  }
+                },
+                "required": ["ok", "latencyMs"],
+                "additionalProperties": false
+              }
+            },
+            "required": ["database", "cacheRedis", "jobsRedis", "storage"],
+            "additionalProperties": false
+          },
+          "type": {
+            "type": "string",
+            "enum": ["about:blank"]
+          },
+          "status": {
+            "type": "number",
+            "enum": [503]
+          },
+          "title": {
+            "type": "string",
+            "enum": ["Service Unavailable"]
+          }
+        },
+        "required": ["draining", "checks", "type"],
+        "additionalProperties": false
+      },
+      "ServiceUnavailableEncoded": {
+        "type": "object",
+        "properties": {
+          "detail": {
+            "type": "string"
+          },
+          "instance": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string",
+            "enum": ["about:blank"]
+          },
+          "status": {
+            "type": "number",
+            "enum": [503]
+          },
+          "title": {
+            "type": "string",
+            "enum": ["Service Unavailable"]
+          }
+        },
+        "required": ["type"],
+        "additionalProperties": false
+      },
+      "TooManyRequestsEncoded": {
+        "type": "object",
+        "properties": {
+          "detail": {
+            "type": "string"
+          },
+          "instance": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string",
+            "enum": ["about:blank"]
+          },
+          "status": {
+            "type": "number",
+            "enum": [429]
+          },
+          "title": {
+            "type": "string",
+            "enum": ["Too Many Requests"]
+          }
+        },
+        "required": ["type"],
+        "additionalProperties": false
+      },
+      "UnauthorizedEncoded": {
+        "type": "object",
+        "properties": {
+          "detail": {
+            "type": "string"
+          },
+          "instance": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string",
+            "enum": ["about:blank"]
+          },
+          "status": {
+            "type": "number",
+            "enum": [401]
+          },
+          "title": {
+            "type": "string",
+            "enum": ["Unauthorized"]
+          }
+        },
+        "required": ["type"],
+        "additionalProperties": false
+      },
+      "NotFoundEncoded": {
+        "type": "object",
+        "properties": {
+          "detail": {
+            "type": "string"
+          },
+          "instance": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string",
+            "enum": ["about:blank"]
+          },
+          "status": {
+            "type": "number",
+            "enum": [404]
+          },
+          "title": {
+            "type": "string",
+            "enum": ["Not Found"]
+          }
+        },
+        "required": ["type"],
+        "additionalProperties": false
+      }
+    },
+    "securitySchemes": {
+      "apiKeyCookie": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "apiKeyCookie",
+        "description": "API Key authentication via cookie"
+      },
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "Bearer token authentication"
+      },
+      "sessionCookie": {
+        "type": "apiKey",
+        "name": "better-auth.session_token",
+        "in": "cookie"
+      }
+    }
+  },
+  "security": [],
+  "tags": [
+    {
+      "name": "account",
+      "description": "The signed-in user's account."
+    },
+    {
+      "name": "health",
+      "description": "Liveness and readiness probes."
+    },
+    {
+      "name": "Auth",
+      "description": "Sign-up, sign-in, sessions and accounts."
+    }
+  ]
 }
